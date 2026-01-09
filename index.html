@@ -5220,7 +5220,7 @@ const app = {
                         
                         // Safe user access - handle multiple possible user field names
                         const user = deposit.user || deposit.user_details || {};
-                        const userName = user.full_name || user.name || 'Unknown User';
+                        const userName = user?.full_name || 'Unknown User';
                         const amount = deposit.amount || 0;
                         const paymentMethod = deposit.payment_method || 'N/A';
                         const date = deposit.createdAt ? new Date(deposit.createdAt).toLocaleDateString() : 'N/A';
