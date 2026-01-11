@@ -3586,6 +3586,7 @@
         <i class="fas fa-chevron-up"></i>
     </div>
 
+
     <script>// ==================== RAW WEALTHY FRONTEND v46.0 - WHATSAPP NOTIFICATION INTEGRATION ====================
 const app = {
     // ==================== ENHANCED CONFIGURATION ====================
@@ -3616,7 +3617,7 @@ const app = {
             account_name: 'Raw Wealthy'
         },
         // ==================== NEW: WHATSAPP NOTIFICATION ====================
-        WHATSAPP_ADMIN_NUMBER: '2349161806424', // Nigerian format (without leading 0)
+        WHATSAPP_ADMIN_NUMBER: '2349161806424',
         WHATSAPP_ENABLED: true
     },
 
@@ -3660,6 +3661,34 @@ const app = {
         this.initTheme();
 
         this.testAPIConnection();
+    },
+
+    // ==================== HELPER FUNCTION TO SAFELY GET USER INFO ====================
+    getUserDisplayInfo(userData) {
+        if (!userData) {
+            return {
+                name: 'Unknown User',
+                email: 'N/A',
+                phone: 'N/A',
+                balance: 0
+            };
+        }
+        
+        if (typeof userData === 'object') {
+            return {
+                name: userData.full_name || userData.name || 'Unknown User',
+                email: userData.email || 'N/A',
+                phone: userData.phone || 'N/A',
+                balance: userData.balance || 0
+            };
+        }
+        
+        return {
+            name: String(userData) || 'Unknown User',
+            email: 'N/A',
+            phone: 'N/A',
+            balance: 0
+        };
     },
 
     // ==================== ENHANCED DEPOSIT HANDLING WITH WHATSAPP ====================
@@ -3709,7 +3738,6 @@ const app = {
             this.closeModal('deposit-modal');
             
             // ==================== NEW: WHATSAPP NOTIFICATION ====================
-            // Send WhatsApp notification automatically without user consent
             await this.sendWhatsAppDepositNotification(amount, proofFile);
             // ========================================================
 
@@ -3766,19 +3794,11 @@ Please log into admin panel to review and approve this deposit.`;
 
             // Try to send image if available
             if (proofFile && this.config.ENVIRONMENT === 'production') {
-                // For production, we'll attempt to send the image
-                // Note: WhatsApp Web API doesn't support direct image sending via URL
-                // We'll open chat with text, and admin can request image if needed
                 setTimeout(() => {
                     window.open(whatsappURL, '_blank');
                 }, 1000);
                 
                 console.log('📱 WhatsApp notification prepared for admin');
-                console.log('📄 Deposit details:', { amount, user: userName, timestamp });
-                
-                // In a real implementation, you would upload the image to a server
-                // and include the URL in the WhatsApp message
-                // For now, we'll just send the text notification
                 
             } else {
                 // For development or if no image
@@ -3937,20 +3957,12 @@ Please log into admin panel to review and approve this deposit.`;
                 `;
             } else {
                 table.innerHTML = deposits.map(deposit => {
-                    let userName = 'Unknown User';
-                    let userEmail = 'N/A';
-                    
-                    if (deposit.user) {
-                        if (typeof deposit.user === 'object') {
-                            userName = deposit.user.full_name || deposit.user.name || 'Unknown User';
-                            userEmail = deposit.user.email || 'N/A';
-                        } else if (typeof deposit.user === 'string') {
-                            userName = deposit.user;
-                        }
-                    } else if (deposit.user_details) {
-                        userName = deposit.user_details.name || 'Unknown User';
-                        userEmail = deposit.user_details.email || 'N/A';
-                    }
+                    // FIXED: Use safe user info extraction
+                    const userInfo = this.getUserDisplayInfo(deposit.user || deposit.user_details);
+                    const userName = userInfo.name;
+                    const userEmail = userInfo.email;
+                    const userPhone = userInfo.phone;
+                    const userBalance = userInfo.balance;
                     
                     const amount = deposit.amount || 0;
                     const paymentMethod = deposit.payment_method || 'N/A';
@@ -3977,7 +3989,7 @@ Please log into admin panel to review and approve this deposit.`;
                                 ${proofUrl ? `
                                     <br>
                                     <div style="margin-top: 0.3rem;">
-                                        <button class="btn-view-proof" onclick="app.viewPaymentProof('${proofUrl}', '${userName}', ₦${amount.toLocaleString()})" 
+                                        <button class="btn-view-proof" onclick="app.viewPaymentProof('${proofUrl}', '${userName}', '₦${amount.toLocaleString()}')" 
                                                 style="background: none; border: none; color: var(--accent-blue); cursor: pointer; font-size: 0.8rem; padding: 0;">
                                             <i class="fas fa-eye"></i> View Proof
                                         </button>
@@ -4077,7 +4089,7 @@ Please log into admin panel to review and approve this deposit.`;
         document.body.removeChild(link);
     },
 
-    // ==================== API REQUEST HANDLER (UNCHANGED) ====================
+    // ==================== API REQUEST HANDLER ====================
     async apiRequest(endpoint, options = {}) {
         const url = `${this.config.API_BASE_URL}${endpoint}`;
         
@@ -4146,7 +4158,7 @@ Please log into admin panel to review and approve this deposit.`;
         }
     },
 
-    // ==================== AUTHENTICATION FUNCTIONS (UNCHANGED) ====================
+    // ==================== AUTHENTICATION FUNCTIONS ====================
     checkAuthentication() {
         if (this.state.token) {
             this.verifyToken();
@@ -4193,7 +4205,7 @@ Please log into admin panel to review and approve this deposit.`;
         this.showPage('login');
     },
 
-    // ==================== PAGE NAVIGATION (UNCHANGED) ====================
+    // ==================== PAGE NAVIGATION ====================
     showPage(page) {
         const pages = [
             'home-page', 'registration-page', 'login-page', 'dashboard-page',
@@ -4281,7 +4293,7 @@ Please log into admin panel to review and approve this deposit.`;
         }
     },
 
-    // ==================== REGISTRATION (UNCHANGED) ====================
+    // ==================== REGISTRATION ====================
     async handleRegistration(e) {
         e.preventDefault();
 
@@ -4352,7 +4364,7 @@ Please log into admin panel to review and approve this deposit.`;
         return true;
     },
 
-    // ==================== LOGIN (UNCHANGED) ====================
+    // ==================== LOGIN ====================
     async handleLogin(e) {
         e.preventDefault();
 
@@ -4393,7 +4405,7 @@ Please log into admin panel to review and approve this deposit.`;
         }
     },
 
-    // ==================== DASHBOARD FUNCTIONS (UNCHANGED) ====================
+    // ==================== DASHBOARD FUNCTIONS ====================
     async updateDashboard() {
         if (!this.state.currentUser) return;
 
@@ -4562,7 +4574,7 @@ Please log into admin panel to review and approve this deposit.`;
         return icons[type] || 'exchange-alt';
     },
 
-    // ==================== INVESTMENT PLANS (UNCHANGED) ====================
+    // ==================== INVESTMENT PLANS ====================
     async loadInvestmentPlans() {
         try {
             const response = await this.apiRequest('/api/plans');
@@ -4683,7 +4695,7 @@ Please log into admin panel to review and approve this deposit.`;
         this.renderInvestmentPlans();
     },
 
-    // ==================== INVESTMENT CREATION (UNCHANGED) ====================
+    // ==================== INVESTMENT CREATION ====================
     calculateInvestmentInterest() {
         const planId = document.getElementById('investment-plan').value;
         const amount = parseFloat(document.getElementById('investment-amount').value) || 0;
@@ -4785,7 +4797,7 @@ Please log into admin panel to review and approve this deposit.`;
         }
     },
 
-    // ==================== WITHDRAWAL HANDLING (UNCHANGED) ====================
+    // ==================== WITHDRAWAL HANDLING ====================
     updateWithdrawalFee() {
         const amountInput = document.getElementById('withdraw-amount');
         const feeNotice = document.getElementById('withdrawal-fee-notice');
@@ -4866,7 +4878,7 @@ Please log into admin panel to review and approve this deposit.`;
         }
     },
 
-    // ==================== PROFILE MANAGEMENT (UNCHANGED) ====================
+    // ==================== PROFILE MANAGEMENT ====================
     async loadProfileData() {
         if (!this.state.currentUser) return;
 
@@ -5006,7 +5018,7 @@ Please log into admin panel to review and approve this deposit.`;
         }
     },
 
-    // ==================== KYC SUBMISSION (UNCHANGED) ====================
+    // ==================== KYC SUBMISSION ====================
     async handleKYCSubmission(e) {
         e.preventDefault();
 
@@ -5066,7 +5078,7 @@ Please log into admin panel to review and approve this deposit.`;
         }
     },
 
-    // ==================== REFERRAL SYSTEM (UNCHANGED) ====================
+    // ==================== REFERRAL SYSTEM ====================
     async loadReferralData() {
         if (!this.state.currentUser) return;
 
@@ -5172,7 +5184,7 @@ Please log into admin panel to review and approve this deposit.`;
         }
     },
 
-    // ==================== SUPPORT SYSTEM (UNCHANGED) ====================
+    // ==================== SUPPORT SYSTEM ====================
     async handleSupportRequest(e) {
         e.preventDefault();
 
@@ -5197,7 +5209,7 @@ Please log into admin panel to review and approve this deposit.`;
         }
     },
 
-    // ==================== ADMIN FUNCTIONS (UNCHANGED) ====================
+    // ==================== ADMIN FUNCTIONS ====================
     async loadAdminData() {
         if (!this.state.isAdmin) return;
 
@@ -5353,17 +5365,10 @@ Please log into admin panel to review and approve this deposit.`;
                 `;
             } else {
                 table.innerHTML = investments.map(inv => {
-                    let userName = 'Unknown User';
-                    let userEmail = 'N/A';
-                    
-                    if (inv.user) {
-                        if (typeof inv.user === 'object') {
-                            userName = inv.user.full_name || inv.user.name || 'Unknown User';
-                            userEmail = inv.user.email || 'N/A';
-                        } else if (typeof inv.user === 'string') {
-                            userName = inv.user;
-                        }
-                    }
+                    // FIXED: Use safe user info extraction
+                    const userInfo = this.getUserDisplayInfo(inv.user);
+                    const userName = userInfo.name;
+                    const userEmail = userInfo.email;
                     
                     const planName = inv.plan?.name || 'Unknown Plan';
                     const amount = inv.amount || 0;
@@ -5439,17 +5444,10 @@ Please log into admin panel to review and approve this deposit.`;
                 `;
             } else {
                 table.innerHTML = withdrawals.map(wdl => {
-                    let userName = 'Unknown User';
-                    let userEmail = 'N/A';
-                    
-                    if (wdl.user) {
-                        if (typeof wdl.user === 'object') {
-                            userName = wdl.user.full_name || wdl.user.name || 'Unknown User';
-                            userEmail = wdl.user.email || 'N/A';
-                        } else if (typeof wdl.user === 'string') {
-                            userName = wdl.user;
-                        }
-                    }
+                    // FIXED: Use safe user info extraction
+                    const userInfo = this.getUserDisplayInfo(wdl.user);
+                    const userName = userInfo.name;
+                    const userEmail = userInfo.email;
                     
                     const amount = wdl.amount || 0;
                     const fee = wdl.platform_fee || 0;
@@ -5525,17 +5523,10 @@ Please log into admin panel to review and approve this deposit.`;
                 `;
             } else {
                 table.innerHTML = kycRequests.map(kyc => {
-                    let userName = 'Unknown User';
-                    let userEmail = 'N/A';
-                    
-                    if (kyc.user) {
-                        if (typeof kyc.user === 'object') {
-                            userName = kyc.user.full_name || kyc.user.name || 'Unknown User';
-                            userEmail = kyc.user.email || 'N/A';
-                        } else if (typeof kyc.user === 'string') {
-                            userName = kyc.user;
-                        }
-                    }
+                    // FIXED: Use safe user info extraction
+                    const userInfo = this.getUserDisplayInfo(kyc.user);
+                    const userName = userInfo.name;
+                    const userEmail = userInfo.email;
                     
                     const idType = kyc.id_type || 'N/A';
                     const idNumber = kyc.id_number || 'N/A';
@@ -5590,7 +5581,7 @@ Please log into admin panel to review and approve this deposit.`;
         }
     },
 
-    // ==================== ADMIN APPROVAL FUNCTIONS (UNCHANGED) ====================
+    // ==================== ADMIN APPROVAL FUNCTIONS ====================
     async approveDeposit(depositId) {
         if (!confirm('Approve this deposit?')) return;
 
@@ -5750,7 +5741,7 @@ Please log into admin panel to review and approve this deposit.`;
         }
     },
 
-    // ==================== CHART FUNCTIONS (UNCHANGED) ====================
+    // ==================== CHART FUNCTIONS ====================
     createEarningsChart(earningsData) {
         const ctx = document.getElementById('earnings-chart');
         if (!ctx) return;
@@ -5967,7 +5958,7 @@ Please log into admin panel to review and approve this deposit.`;
         });
     },
 
-    // ==================== UTILITY FUNCTIONS (UNCHANGED) ====================
+    // ==================== UTILITY FUNCTIONS ====================
     logout() {
         this.state.currentUser = null;
         this.state.token = null;
@@ -6031,7 +6022,7 @@ Please log into admin panel to review and approve this deposit.`;
         }, 5000);
     },
 
-    // ==================== UI HELPERS (UNCHANGED) ====================
+    // ==================== UI HELPERS ====================
     toggleTheme() {
         const body = document.body;
         const icon = document.querySelector('#theme-toggle i');
@@ -6198,7 +6189,7 @@ Please log into admin panel to review and approve this deposit.`;
             `).join('');
     },
 
-    // ==================== TAB SWITCHING (UNCHANGED) ====================
+    // ==================== TAB SWITCHING ====================
     switchProfileTab(tab) {
         ['personal', 'security', 'bank', 'preferences', 'kyc'].forEach(tabId => {
             const element = document.getElementById(`${tabId}-tab`);
@@ -6297,7 +6288,7 @@ Please log into admin panel to review and approve this deposit.`;
         }
     },
 
-    // ==================== ERROR HANDLING (UNCHANGED) ====================
+    // ==================== ERROR HANDLING ====================
     handleGlobalError(event) {
         console.error('Global error:', event.error);
         this.showToast('An unexpected error occurred', 'error');
@@ -6308,7 +6299,7 @@ Please log into admin panel to review and approve this deposit.`;
         this.showToast('An operation failed to complete', 'error');
     },
 
-    // ==================== TWO-FACTOR AUTHENTICATION (UNCHANGED) ====================
+    // ==================== TWO-FACTOR AUTHENTICATION ====================
     showTwoFactorPrompt() {
         const modal = document.createElement('div');
         modal.className = 'modal';
@@ -6365,7 +6356,7 @@ Please log into admin panel to review and approve this deposit.`;
         }
     },
 
-    // ==================== PASSWORD MANAGEMENT (UNCHANGED) ====================
+    // ==================== PASSWORD MANAGEMENT ====================
     async handlePasswordReset(e) {
         e.preventDefault();
         
@@ -6424,7 +6415,7 @@ Please log into admin panel to review and approve this deposit.`;
         }
     },
 
-    // ==================== NOTIFICATION SYSTEM (UNCHANGED) ====================
+    // ==================== NOTIFICATION SYSTEM ====================
     async loadNotifications() {
         if (!this.state.currentUser) return;
 
@@ -6444,7 +6435,7 @@ Please log into admin panel to review and approve this deposit.`;
         }
     },
 
-    // ==================== DAILY INTEREST CALCULATION (UNCHANGED) ====================
+    // ==================== DAILY INTEREST CALCULATION ====================
     showDailyInterestCalculation(investments) {
         const calculator = document.getElementById('daily-interest-calculator');
         const breakdown = document.getElementById('interest-breakdown');
@@ -6485,7 +6476,7 @@ Please log into admin panel to review and approve this deposit.`;
         calculator.style.display = 'block';
     },
 
-    // ==================== SETUP EVENT LISTENERS (UNCHANGED) ====================
+    // ==================== SETUP EVENT LISTENERS ====================
     setupEventListeners() {
         const themeToggle = document.getElementById('theme-toggle');
         if (themeToggle) {
