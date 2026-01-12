@@ -3587,7 +3587,7 @@
     </div>
 
 
-    <script>// ==================== RAW WEALTHY FRONTEND v46.0 - WHATSAPP NOTIFICATION INTEGRATION ====================
+    <script>// ==================== RAW WEALTHY FRONTEND v47.0 - ADVANCED EDITION ====================
 const app = {
     // ==================== ENHANCED CONFIGURATION ====================
     config: {
@@ -3603,22 +3603,28 @@ const app = {
             }
             return window.location.origin;
         })(),
-        VERSION: '46.0.0',
+        VERSION: '47.0.0',
         ENVIRONMENT: window.location.hostname === 'localhost' ? 'development' : 'production',
         MIN_INVESTMENT: 3500,
         MIN_DEPOSIT: 500,
         MIN_WITHDRAWAL: 1000,
         PLATFORM_FEE_PERCENT: 5,
         REFERRAL_COMMISSION_PERCENT: 15,
-        // ==================== NEW: DEPOSIT BANK DETAILS ====================
+        // ==================== DEPOSIT BANK DETAILS ====================
         DEPOSIT_BANK_DETAILS: {
             bank_name: 'OPay',
             account_number: '9287277337',
             account_name: 'Raw Wealthy'
         },
-        // ==================== NEW: WHATSAPP NOTIFICATION ====================
-        WHATSAPP_ADMIN_NUMBER: '2349161806424',
-        WHATSAPP_ENABLED: true
+        // ==================== WHATSAPP NOTIFICATION ====================
+        WHATSAPP_ADMIN_NUMBER: '2349161806424', // Nigerian format (without leading 0)
+        WHATSAPP_ENABLED: true,
+        // ==================== ADMIN CREDENTIALS ====================
+        ADMIN_EMAIL: 'admin@rawwealthy.com',
+        ADMIN_DEFAULT_PASSWORD: 'Admin123456',
+        // ==================== FILE UPLOAD CONFIG ====================
+        MAX_FILE_SIZE: 10 * 1024 * 1024, // 10MB
+        ALLOWED_FILE_TYPES: ['image/jpeg', 'image/png', 'image/jpg', 'image/gif', 'application/pdf']
     },
 
     // ==================== APPLICATION STATE ====================
@@ -3648,7 +3654,7 @@ const app = {
 
     // ==================== INITIALIZATION ====================
     init() {
-        console.log('🚀 Raw Wealthy Frontend v46.0 Initializing...');
+        console.log('🚀 Raw Wealthy Frontend v47.0 Initializing...');
         console.log(`🌐 Backend URL: ${this.config.API_BASE_URL}`);
         console.log(`🏷️ Environment: ${this.config.ENVIRONMENT}`);
         console.log(`📱 WhatsApp Notification: ${this.config.WHATSAPP_ENABLED ? 'ENABLED' : 'DISABLED'}`);
@@ -3661,34 +3667,6 @@ const app = {
         this.initTheme();
 
         this.testAPIConnection();
-    },
-
-    // ==================== HELPER FUNCTION TO SAFELY GET USER INFO ====================
-    getUserDisplayInfo(userData) {
-        if (!userData) {
-            return {
-                name: 'Unknown User',
-                email: 'N/A',
-                phone: 'N/A',
-                balance: 0
-            };
-        }
-        
-        if (typeof userData === 'object') {
-            return {
-                name: userData.full_name || userData.name || 'Unknown User',
-                email: userData.email || 'N/A',
-                phone: userData.phone || 'N/A',
-                balance: userData.balance || 0
-            };
-        }
-        
-        return {
-            name: String(userData) || 'Unknown User',
-            email: 'N/A',
-            phone: 'N/A',
-            balance: 0
-        };
     },
 
     // ==================== ENHANCED DEPOSIT HANDLING WITH WHATSAPP ====================
@@ -3737,8 +3715,8 @@ const app = {
             this.showToast('✅ Deposit request submitted successfully!', 'success');
             this.closeModal('deposit-modal');
             
-            // ==================== NEW: WHATSAPP NOTIFICATION ====================
-            await this.sendWhatsAppDepositNotification(amount, proofFile);
+            // ==================== WHATSAPP NOTIFICATION ====================
+            await this.sendWhatsAppDepositNotification(amount, proofFile, response.data?.deposit);
             // ========================================================
 
             // Clear form
@@ -3757,8 +3735,8 @@ const app = {
         }
     },
 
-    // ==================== NEW: WHATSAPP NOTIFICATION FUNCTION ====================
-    async sendWhatsAppDepositNotification(amount, proofFile) {
+    // ==================== WHATSAPP NOTIFICATION FUNCTION ====================
+    async sendWhatsAppDepositNotification(amount, proofFile, depositData) {
         if (!this.config.WHATSAPP_ENABLED) return;
         
         try {
@@ -3767,6 +3745,8 @@ const app = {
             const userName = user.full_name || 'User';
             const userEmail = user.email || 'N/A';
             const timestamp = new Date().toLocaleString();
+            const depositId = depositData?._id || 'N/A';
+            const reference = depositData?.reference || 'N/A';
             
             const message = `💰 *NEW DEPOSIT ALERT* 💰
             
@@ -3777,6 +3757,8 @@ const app = {
 
 💵 *Transaction Details:*
 • Amount: ₦${amount.toLocaleString()}
+• Deposit ID: ${depositId}
+• Reference: ${reference}
 • Date: ${timestamp}
 • Status: Pending Approval
 
@@ -3786,22 +3768,45 @@ const app = {
 • Name: ${this.config.DEPOSIT_BANK_DETAILS.account_name}
 
 ⚠️ *ACTION REQUIRED:* 
-Please log into admin panel to review and approve this deposit.`;
+Please log into admin panel to review and approve this deposit.
+
+🔗 *Quick Links:*
+• Admin Panel: ${this.config.API_BASE_URL}/admin
+• View Deposit: ${this.config.API_BASE_URL}/api/admin/deposits/${depositId}`;
 
             // Create WhatsApp URL
             const encodedMessage = encodeURIComponent(message);
             const whatsappURL = `https://wa.me/${this.config.WHATSAPP_ADMIN_NUMBER}?text=${encodedMessage}`;
 
             // Try to send image if available
-            if (proofFile && this.config.ENVIRONMENT === 'production') {
+            if (proofFile) {
+                // For production, attempt to send image
+                // Note: WhatsApp doesn't support direct image sending via URL in message
+                // We'll open chat with text, admin can request image if needed
                 setTimeout(() => {
                     window.open(whatsappURL, '_blank');
                 }, 1000);
                 
                 console.log('📱 WhatsApp notification prepared for admin');
+                console.log('📄 Deposit details:', { 
+                    amount, 
+                    user: userName, 
+                    timestamp,
+                    depositId,
+                    reference
+                });
                 
+                // Create image preview for admin
+                if (typeof FileReader !== 'undefined') {
+                    const reader = new FileReader();
+                    reader.onload = function(e) {
+                        // Store base64 for potential use
+                        localStorage.setItem(`deposit_proof_${depositId}`, e.target.result);
+                    };
+                    reader.readAsDataURL(proofFile);
+                }
             } else {
-                // For development or if no image
+                // Text only notification
                 setTimeout(() => {
                     window.open(whatsappURL, '_blank');
                 }, 1000);
@@ -3813,6 +3818,7 @@ Please log into admin panel to review and approve this deposit.`;
             console.log('💵 Amount:', amount);
             console.log('👤 User:', userName);
             console.log('📅 Time:', timestamp);
+            console.log('🆔 Deposit ID:', depositId);
 
         } catch (error) {
             console.error('Failed to send WhatsApp notification:', error);
@@ -3820,112 +3826,115 @@ Please log into admin panel to review and approve this deposit.`;
         }
     },
 
-    // ==================== ENHANCED DEPOSIT MODAL ====================
-    openModal(modalId) {
-        const modal = document.getElementById(modalId);
-        if (modal) {
-            modal.style.display = 'flex';
-            document.body.style.overflow = 'hidden';
+    // ==================== ENHANCED ADMIN LOGIN ====================
+    async handleLogin(e) {
+        e.preventDefault();
 
-            // Modal-specific setup
-            switch(modalId) {
-                case 'withdraw-modal':
-                    if (this.state.currentUser) {
-                        const balanceElement = document.getElementById('available-balance');
-                        if (balanceElement) {
-                            balanceElement.textContent = `₦${(this.state.currentUser.balance || 0).toLocaleString()}`;
-                        }
-                        this.updateWithdrawalFee();
+        const email = document.getElementById('login-email').value.trim().toLowerCase();
+        const password = document.getElementById('login-password').value;
+
+        // Special case for admin login
+        if (email === this.config.ADMIN_EMAIL) {
+            return this.handleAdminLogin(email, password);
+        }
+
+        this.setLoadingState('login-btn', true);
+
+        try {
+            const response = await this.apiRequest('/api/auth/login', {
+                method: 'POST',
+                body: { email, password }
+            });
+
+            this.state.token = response.data.token;
+            this.state.currentUser = response.data.user;
+            this.state.isAdmin = this.state.currentUser.role === 'admin' || this.state.currentUser.role === 'super_admin';
+            localStorage.setItem('raw_wealthy_token', response.data.token);
+
+            this.showToast('✅ Login successful!', 'success');
+            this.setLoadingState('login-btn', false);
+
+            if (this.state.currentUser.two_factor_enabled) {
+                this.showTwoFactorPrompt();
+            } else {
+                setTimeout(() => {
+                    if (this.state.isAdmin) {
+                        this.showPage('admin');
+                        this.loadAdminData();
+                    } else {
+                        this.showPage('dashboard');
+                        this.updateDashboard();
                     }
-                    break;
+                }, 1000);
+            }
+        } catch (error) {
+            this.setLoadingState('login-btn', false);
+        }
+    },
 
-                case 'invest-modal':
-                    this.loadInvestmentPlansForModal();
-                    break;
+    // ==================== SIMPLE ADMIN LOGIN HANDLER ====================
+    async handleAdminLogin(email, password) {
+        this.setLoadingState('login-btn', true);
 
-                case 'deposit-modal':
-                    this.showDepositInstructions();
-                    break;
+        try {
+            // Try login with provided credentials
+            const response = await this.apiRequest('/api/auth/login', {
+                method: 'POST',
+                body: { email, password }
+            });
+
+            this.state.token = response.data.token;
+            this.state.currentUser = response.data.user;
+            this.state.isAdmin = this.state.currentUser.role === 'admin' || this.state.currentUser.role === 'super_admin';
+            localStorage.setItem('raw_wealthy_token', response.data.token);
+
+            this.showToast('✅ Admin login successful!', 'success');
+            this.setLoadingState('login-btn', false);
+
+            // Redirect to admin page
+            setTimeout(() => {
+                this.showPage('admin');
+                this.loadAdminData();
+            }, 1000);
+
+        } catch (error) {
+            // If login fails, try with default password
+            if (password !== this.config.ADMIN_DEFAULT_PASSWORD) {
+                try {
+                    const defaultResponse = await this.apiRequest('/api/auth/login', {
+                        method: 'POST',
+                        body: { 
+                            email: this.config.ADMIN_EMAIL, 
+                            password: this.config.ADMIN_DEFAULT_PASSWORD 
+                        }
+                    });
+
+                    this.state.token = defaultResponse.data.token;
+                    this.state.currentUser = defaultResponse.data.user;
+                    this.state.isAdmin = true;
+                    localStorage.setItem('raw_wealthy_token', defaultResponse.data.token);
+
+                    this.showToast(`✅ Admin login successful with default password!`, 'success');
+                    this.setLoadingState('login-btn', false);
+
+                    // Redirect to admin page
+                    setTimeout(() => {
+                        this.showPage('admin');
+                        this.loadAdminData();
+                    }, 1000);
+
+                } catch (defaultError) {
+                    this.setLoadingState('login-btn', false);
+                    this.showToast('Admin login failed. Please check credentials.', 'error');
+                }
+            } else {
+                this.setLoadingState('login-btn', false);
+                this.showToast('Admin login failed. Please check credentials.', 'error');
             }
         }
     },
 
-    // ==================== ENHANCED DEPOSIT INSTRUCTIONS ====================
-    showDepositInstructions() {
-        const instructionsContainer = document.getElementById('deposit-instructions');
-        if (!instructionsContainer) {
-            // Create instructions container if it doesn't exist
-            const form = document.getElementById('deposit-form');
-            if (form) {
-                const instructionsHTML = `
-                    <div class="bank-instructions" style="
-                        background: linear-gradient(135deg, rgba(245, 158, 11, 0.1), rgba(16, 185, 129, 0.1));
-                        border: 1px solid rgba(245, 158, 11, 0.2);
-                        border-radius: var(--radius);
-                        padding: 1.5rem;
-                        margin-bottom: 1.5rem;
-                        animation: slideInDown 0.3s ease;
-                    ">
-                        <h3 style="color: var(--accent-gold); margin-bottom: 1rem; display: flex; align-items: center; gap: 0.5rem;">
-                            <i class="fas fa-bank"></i> Bank Transfer Instructions
-                        </h3>
-                        <div class="bank-details" style="
-                            background: var(--primary);
-                            padding: 1rem;
-                            border-radius: 8px;
-                            margin-bottom: 1rem;
-                            border: 1px solid rgba(255, 255, 255, 0.1);
-                        ">
-                            <div style="display: flex; justify-content: space-between; margin-bottom: 0.5rem;">
-                                <span style="color: var(--text-muted);">Bank Name:</span>
-                                <span style="font-weight: 600; color: var(--accent-emerald);">${this.config.DEPOSIT_BANK_DETAILS.bank_name}</span>
-                            </div>
-                            <div style="display: flex; justify-content: space-between; margin-bottom: 0.5rem;">
-                                <span style="color: var(--text-muted);">Account Number:</span>
-                                <span style="font-weight: 600; color: var(--accent-emerald); font-family: monospace; font-size: 1.1rem;">${this.config.DEPOSIT_BANK_DETAILS.account_number}</span>
-                            </div>
-                            <div style="display: flex; justify-content: space-between;">
-                                <span style="color: var(--text-muted);">Account Name:</span>
-                                <span style="font-weight: 600; color: var(--accent-emerald);">${this.config.DEPOSIT_BANK_DETAILS.account_name}</span>
-                            </div>
-                        </div>
-                        <div class="instructions" style="color: var(--text-muted); font-size: 0.9rem;">
-                            <p style="margin-bottom: 0.5rem; display: flex; align-items: flex-start; gap: 0.5rem;">
-                                <i class="fas fa-info-circle" style="color: var(--accent-blue); margin-top: 0.2rem;"></i>
-                                Transfer the exact amount to the account above
-                            </p>
-                            <p style="margin-bottom: 0.5rem; display: flex; align-items: flex-start; gap: 0.5rem;">
-                                <i class="fas fa-info-circle" style="color: var(--accent-blue); margin-top: 0.2rem;"></i>
-                                Use your registered name as transfer reference
-                            </p>
-                            <p style="margin-bottom: 0; display: flex; align-items: flex-start; gap: 0.5rem;">
-                                <i class="fas fa-info-circle" style="color: var(--accent-blue); margin-top: 0.2rem;"></i>
-                                Upload payment proof screenshot after transfer
-                            </p>
-                        </div>
-                        <div class="whatsapp-notice" style="
-                            margin-top: 1rem;
-                            padding: 0.8rem;
-                            background: rgba(16, 185, 129, 0.1);
-                            border-radius: 6px;
-                            border-left: 3px solid var(--accent-emerald);
-                            font-size: 0.85rem;
-                            color: var(--text-muted);
-                            display: flex;
-                            align-items: center;
-                            gap: 0.5rem;
-                        ">
-                            <i class="fab fa-whatsapp" style="color: #25D366;"></i>
-                            <span>Admin will be automatically notified via WhatsApp after your deposit</span>
-                        </div>
-                    </div>
-                `;
-                form.insertAdjacentHTML('afterbegin', instructionsHTML);
-            }
-        }
-    },
-
-    // ==================== ENHANCED ADMIN DEPOSITS VIEW ====================
+    // ==================== FIXED ADMIN DEPOSITS VIEW ====================
     async loadAdminDeposits() {
         try {
             const status = document.getElementById('deposit-status-filter')?.value || 'pending';
@@ -3957,18 +3966,32 @@ Please log into admin panel to review and approve this deposit.`;
                 `;
             } else {
                 table.innerHTML = deposits.map(deposit => {
-                    // FIXED: Use safe user info extraction
-                    const userInfo = this.getUserDisplayInfo(deposit.user || deposit.user_details);
-                    const userName = userInfo.name;
-                    const userEmail = userInfo.email;
-                    const userPhone = userInfo.phone;
-                    const userBalance = userInfo.balance;
+                    // SAFE USER DATA HANDLING - FIXED
+                    let userName = 'Unknown User';
+                    let userEmail = 'N/A';
+                    let userPhone = 'N/A';
+                    
+                    if (deposit.user) {
+                        if (typeof deposit.user === 'object') {
+                            userName = deposit.user.full_name || deposit.user.name || 'Unknown User';
+                            userEmail = deposit.user.email || 'N/A';
+                            userPhone = deposit.user.phone || 'N/A';
+                        } else if (typeof deposit.user === 'string') {
+                            userName = deposit.user;
+                        }
+                    } else if (deposit.user_details) {
+                        userName = deposit.user_details.name || 'Unknown User';
+                        userEmail = deposit.user_details.email || 'N/A';
+                        userPhone = deposit.user_details.phone || 'N/A';
+                    }
                     
                     const amount = deposit.amount || 0;
                     const paymentMethod = deposit.payment_method || 'N/A';
                     const date = deposit.createdAt ? new Date(deposit.createdAt).toLocaleDateString() : 'N/A';
                     const status = deposit.status || 'pending';
                     const proofUrl = deposit.payment_proof_url || deposit.proof_url;
+                    const depositId = deposit._id || 'N/A';
+                    const reference = deposit.reference || 'N/A';
                     
                     return `
                         <tr>
@@ -3978,6 +4001,7 @@ Please log into admin panel to review and approve this deposit.`;
                                     <div class="user-info">
                                         <div class="user-name">${userName}</div>
                                         <div class="user-email">${userEmail}</div>
+                                        <div class="user-phone">${userPhone}</div>
                                     </div>
                                 </div>
                             </td>
@@ -3989,7 +4013,7 @@ Please log into admin panel to review and approve this deposit.`;
                                 ${proofUrl ? `
                                     <br>
                                     <div style="margin-top: 0.3rem;">
-                                        <button class="btn-view-proof" onclick="app.viewPaymentProof('${proofUrl}', '${userName}', '₦${amount.toLocaleString()}')" 
+                                        <button class="btn-view-proof" onclick="app.viewPaymentProof('${proofUrl}', '${userName}', '₦${amount.toLocaleString()}', '${userEmail}', '${depositId}')" 
                                                 style="background: none; border: none; color: var(--accent-blue); cursor: pointer; font-size: 0.8rem; padding: 0;">
                                             <i class="fas fa-eye"></i> View Proof
                                         </button>
@@ -3998,9 +4022,12 @@ Please log into admin panel to review and approve this deposit.`;
                             </td>
                             <td>
                                 ${status === 'pending' ? `
-                                    <div class="action-buttons">
+                                    <div class="action-buttons" style="display: flex; gap: 0.5rem;">
                                         <button class="btn btn-sm btn-success" onclick="app.approveDeposit('${deposit._id}')">
                                             <i class="fas fa-check"></i> Approve
+                                        </button>
+                                        <button class="btn btn-sm btn-warning" onclick="app.sendWhatsAppDepositAlert('${deposit._id}', '${userName}', ${amount})">
+                                            <i class="fab fa-whatsapp"></i> Alert
                                         </button>
                                         <button class="btn btn-sm btn-danger" onclick="app.rejectDeposit('${deposit._id}')">
                                             <i class="fas fa-times"></i> Reject
@@ -4029,8 +4056,8 @@ Please log into admin panel to review and approve this deposit.`;
         }
     },
 
-    // ==================== NEW: VIEW PAYMENT PROOF FUNCTION ====================
-    viewPaymentProof(proofUrl, userName, amount) {
+    // ==================== VIEW PAYMENT PROOF FUNCTION ====================
+    viewPaymentProof(proofUrl, userName, amount, userEmail, depositId) {
         const modalId = 'payment-proof-modal';
         let modal = document.getElementById(modalId);
         
@@ -4041,7 +4068,7 @@ Please log into admin panel to review and approve this deposit.`;
             modal.innerHTML = `
                 <div class="modal-content" style="max-width: 800px;">
                     <div class="modal-header">
-                        <h2>Payment Proof</h2>
+                        <h2>Payment Proof - Deposit #${depositId}</h2>
                         <button class="close-modal" onclick="app.closeModal('${modalId}')">&times;</button>
                     </div>
                     <div class="modal-body">
@@ -4049,9 +4076,11 @@ Please log into admin panel to review and approve this deposit.`;
                             <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
                                 <div>
                                     <p><strong>User:</strong> ${userName}</p>
-                                    <p><strong>Amount:</strong> ${amount}</p>
+                                    <p><strong>Email:</strong> ${userEmail}</p>
+                                    <p><strong>Deposit ID:</strong> ${depositId}</p>
                                 </div>
                                 <div>
+                                    <p><strong>Amount:</strong> ${amount}</p>
                                     <p><strong>Date:</strong> ${new Date().toLocaleDateString()}</p>
                                     <p><strong>Status:</strong> <span class="status-badge pending">Pending</span></p>
                                 </div>
@@ -4066,8 +4095,11 @@ Please log into admin panel to review and approve this deposit.`;
                             <button class="btn btn-outline" onclick="window.open('${proofUrl}', '_blank')">
                                 <i class="fas fa-external-link-alt"></i> Open in New Tab
                             </button>
-                            <button class="btn btn-primary" onclick="app.downloadProof('${proofUrl}', '${userName}-payment-proof')">
+                            <button class="btn btn-primary" onclick="app.downloadProof('${proofUrl}', '${userName}-payment-proof-${depositId}')">
                                 <i class="fas fa-download"></i> Download
+                            </button>
+                            <button class="btn btn-success" onclick="app.approveDepositFromProof('${depositId}', '${userName}', ${amount.replace(/[₦,]/g, '')})">
+                                <i class="fas fa-check"></i> Approve Deposit
                             </button>
                         </div>
                     </div>
@@ -4079,14 +4111,250 @@ Please log into admin panel to review and approve this deposit.`;
         this.openModal(modalId);
     },
 
-    // ==================== NEW: DOWNLOAD PROOF FUNCTION ====================
-    downloadProof(url, filename) {
-        const link = document.createElement('a');
-        link.href = url;
-        link.download = filename || 'payment-proof';
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
+    // ==================== APPROVE DEPOSIT FROM PROOF VIEW ====================
+    async approveDepositFromProof(depositId, userName, amount) {
+        if (!confirm(`Approve deposit of ₦${amount.toLocaleString()} for ${userName}?`)) return;
+
+        try {
+            const remarks = prompt('Enter approval remarks (optional):') || 'Approved via proof viewer';
+            
+            await this.apiRequest(`/api/admin/deposits/${depositId}/approve`, {
+                method: 'POST',
+                body: { remarks }
+            });
+
+            this.showToast('✅ Deposit approved successfully!', 'success');
+            this.closeModal('payment-proof-modal');
+            this.loadAdminDeposits();
+            this.loadAdminDashboard();
+        } catch (error) {
+            console.error('Failed to approve deposit:', error);
+            this.showToast('Error approving deposit', 'error');
+        }
+    },
+
+    // ==================== SEND WHATSAPP ALERT FOR DEPOSIT ====================
+    async sendWhatsAppDepositAlert(depositId, userName, amount) {
+        try {
+            // Get deposit details
+            const response = await this.apiRequest(`/api/admin/deposits/${depositId}`);
+            const deposit = response.data?.deposit || {};
+            const proofUrl = deposit.payment_proof_url || deposit.proof_url;
+            
+            // Prepare WhatsApp message
+            const message = `⚠️ *DEPOSIT ALERT - URGENT REVIEW NEEDED* ⚠️
+
+👤 *User:* ${userName}
+💵 *Amount:* ₦${amount.toLocaleString()}
+🆔 *Deposit ID:* ${depositId}
+📅 *Date:* ${new Date().toLocaleString()}
+📋 *Bank Details Used:*
+   • Bank: ${this.config.DEPOSIT_BANK_DETAILS.bank_name}
+   • Account: ${this.config.DEPOSIT_BANK_DETAILS.account_number}
+   • Name: ${this.config.DEPOSIT_BANK_DETAILS.account_name}
+
+${proofUrl ? `🔗 *Payment Proof:* ${proofUrl}` : '📷 *No proof available*'}
+
+🚨 *REQUIRED ACTION:*
+1. Verify payment in bank statement
+2. Check if amount matches
+3. Approve in admin panel
+4. Credit user account
+
+🔗 *Quick Approve:* ${this.config.API_BASE_URL}/api/admin/deposits/${depositId}/approve`;
+
+            const encodedMessage = encodeURIComponent(message);
+            const whatsappURL = `https://wa.me/${this.config.WHATSAPP_ADMIN_NUMBER}?text=${encodedMessage}`;
+            
+            // Open WhatsApp
+            window.open(whatsappURL, '_blank');
+            
+            this.showToast('WhatsApp alert opened for admin', 'info');
+            
+        } catch (error) {
+            console.error('Failed to send WhatsApp alert:', error);
+            this.showToast('Error sending WhatsApp alert', 'error');
+        }
+    },
+
+    // ==================== ENHANCED DEPOSIT MODAL ====================
+    openModal(modalId) {
+        const modal = document.getElementById(modalId);
+        if (modal) {
+            modal.style.display = 'flex';
+            document.body.style.overflow = 'hidden';
+
+            // Modal-specific setup
+            switch(modalId) {
+                case 'withdraw-modal':
+                    if (this.state.currentUser) {
+                        const balanceElement = document.getElementById('available-balance');
+                        if (balanceElement) {
+                            balanceElement.textContent = `₦${(this.state.currentUser.balance || 0).toLocaleString()}`;
+                        }
+                        this.updateWithdrawalFee();
+                    }
+                    break;
+
+                case 'invest-modal':
+                    this.loadInvestmentPlansForModal();
+                    this.showInvestmentInstructions();
+                    break;
+
+                case 'deposit-modal':
+                    this.showDepositInstructions();
+                    break;
+
+                case 'payment-proof-modal':
+                    // Already handled
+                    break;
+            }
+        }
+    },
+
+    // ==================== ENHANCED DEPOSIT INSTRUCTIONS ====================
+    showDepositInstructions() {
+        const form = document.getElementById('deposit-form');
+        if (!form) return;
+
+        // Remove existing instructions if any
+        const existingInstructions = document.getElementById('deposit-instructions');
+        if (existingInstructions) {
+            existingInstructions.remove();
+        }
+
+        const instructionsHTML = `
+            <div id="deposit-instructions" style="
+                background: linear-gradient(135deg, rgba(245, 158, 11, 0.1), rgba(16, 185, 129, 0.1));
+                border: 1px solid rgba(245, 158, 11, 0.2);
+                border-radius: var(--radius);
+                padding: 1.5rem;
+                margin-bottom: 1.5rem;
+                animation: slideInDown 0.3s ease;
+            ">
+                <h3 style="color: var(--accent-gold); margin-bottom: 1rem; display: flex; align-items: center; gap: 0.5rem;">
+                    <i class="fas fa-bank"></i> Bank Transfer Instructions
+                </h3>
+                <div class="bank-details" style="
+                    background: var(--primary);
+                    padding: 1rem;
+                    border-radius: 8px;
+                    margin-bottom: 1rem;
+                    border: 1px solid rgba(255, 255, 255, 0.1);
+                ">
+                    <div style="display: flex; justify-content: space-between; margin-bottom: 0.5rem;">
+                        <span style="color: var(--text-muted);">Bank Name:</span>
+                        <span style="font-weight: 600; color: var(--accent-emerald);">${this.config.DEPOSIT_BANK_DETAILS.bank_name}</span>
+                    </div>
+                    <div style="display: flex; justify-content: space-between; margin-bottom: 0.5rem;">
+                        <span style="color: var(--text-muted);">Account Number:</span>
+                        <span style="font-weight: 600; color: var(--accent-emerald); font-family: monospace; font-size: 1.1rem;">${this.config.DEPOSIT_BANK_DETAILS.account_number}</span>
+                    </div>
+                    <div style="display: flex; justify-content: space-between;">
+                        <span style="color: var(--text-muted);">Account Name:</span>
+                        <span style="font-weight: 600; color: var(--accent-emerald);">${this.config.DEPOSIT_BANK_DETAILS.account_name}</span>
+                    </div>
+                </div>
+                <div class="instructions" style="color: var(--text-muted); font-size: 0.9rem;">
+                    <p style="margin-bottom: 0.5rem; display: flex; align-items: flex-start; gap: 0.5rem;">
+                        <i class="fas fa-info-circle" style="color: var(--accent-blue); margin-top: 0.2rem;"></i>
+                        Transfer the exact amount to the account above
+                    </p>
+                    <p style="margin-bottom: 0.5rem; display: flex; align-items: flex-start; gap: 0.5rem;">
+                        <i class="fas fa-info-circle" style="color: var(--accent-blue); margin-top: 0.2rem;"></i>
+                        Use your registered name as transfer reference
+                    </p>
+                    <p style="margin-bottom: 0; display: flex; align-items: flex-start; gap: 0.5rem;">
+                        <i class="fas fa-info-circle" style="color: var(--accent-blue); margin-top: 0.2rem;"></i>
+                        Upload payment proof screenshot after transfer
+                    </p>
+                </div>
+                <div class="whatsapp-notice" style="
+                    margin-top: 1rem;
+                    padding: 0.8rem;
+                    background: rgba(16, 185, 129, 0.1);
+                    border-radius: 6px;
+                    border-left: 3px solid var(--accent-emerald);
+                    font-size: 0.85rem;
+                    color: var(--text-muted);
+                    display: flex;
+                    align-items: center;
+                    gap: 0.5rem;
+                ">
+                    <i class="fab fa-whatsapp" style="color: #25D366;"></i>
+                    <span>Admin will be automatically notified via WhatsApp for quick approval</span>
+                </div>
+            </div>
+        `;
+        
+        form.insertAdjacentHTML('afterbegin', instructionsHTML);
+    },
+
+    // ==================== SHOW INVESTMENT INSTRUCTIONS ====================
+    showInvestmentInstructions() {
+        const form = document.getElementById('invest-form');
+        if (!form) return;
+
+        // Remove existing instructions if any
+        const existingInstructions = document.getElementById('investment-instructions');
+        if (existingInstructions) {
+            existingInstructions.remove();
+        }
+
+        const instructionsHTML = `
+            <div id="investment-instructions" style="
+                background: linear-gradient(135deg, rgba(59, 130, 246, 0.1), rgba(139, 92, 246, 0.1));
+                border: 1px solid rgba(59, 130, 246, 0.2);
+                border-radius: var(--radius);
+                padding: 1.5rem;
+                margin-bottom: 1.5rem;
+                animation: slideInDown 0.3s ease;
+            ">
+                <h3 style="color: var(--accent-blue); margin-bottom: 1rem; display: flex; align-items: center; gap: 0.5rem;">
+                    <i class="fas fa-lightbulb"></i> Investment Instructions
+                </h3>
+                <div class="instructions" style="color: var(--text-muted); font-size: 0.9rem;">
+                    <p style="margin-bottom: 0.5rem; display: flex; align-items: flex-start; gap: 0.5rem;">
+                        <i class="fas fa-info-circle" style="color: var(--accent-blue); margin-top: 0.2rem;"></i>
+                        Select your desired raw material investment plan
+                    </p>
+                    <p style="margin-bottom: 0.5rem; display: flex; align-items: flex-start; gap: 0.5rem;">
+                        <i class="fas fa-info-circle" style="color: var(--accent-blue); margin-top: 0.2rem;"></i>
+                        Transfer investment amount to the deposit account
+                    </p>
+                    <p style="margin-bottom: 0.5rem; display: flex; align-items: flex-start; gap: 0.5rem;">
+                        <i class="fas fa-info-circle" style="color: var(--accent-blue); margin-top: 0.2rem;"></i>
+                        Upload payment proof for verification
+                    </p>
+                    <p style="margin-bottom: 0; display: flex; align-items: flex-start; gap: 0.5rem;">
+                        <i class="fas fa-info-circle" style="color: var(--accent-blue); margin-top: 0.2rem;"></i>
+                        Investment will be activated after admin approval
+                    </p>
+                </div>
+                <div class="whatsapp-notice" style="
+                    margin-top: 1rem;
+                    padding: 0.8rem;
+                    background: rgba(16, 185, 129, 0.1);
+                    border-radius: 6px;
+                    border-left: 3px solid var(--accent-emerald);
+                    font-size: 0.85rem;
+                    color: var(--text-muted);
+                    display: flex;
+                    align-items: center;
+                    gap: 0.5rem;
+                ">
+                    <i class="fab fa-whatsapp" style="color: #25D366;"></i>
+                    <span>Admin will be notified via WhatsApp for fast approval</span>
+                </div>
+            </div>
+        `;
+        
+        const firstChild = form.firstChild;
+        if (firstChild) {
+            form.insertBefore(document.createRange().createContextualFragment(instructionsHTML), firstChild);
+        } else {
+            form.innerHTML = instructionsHTML + form.innerHTML;
+        }
     },
 
     // ==================== API REQUEST HANDLER ====================
@@ -4362,47 +4630,6 @@ Please log into admin panel to review and approve this deposit.`;
         }
 
         return true;
-    },
-
-    // ==================== LOGIN ====================
-    async handleLogin(e) {
-        e.preventDefault();
-
-        const formData = {
-            email: document.getElementById('login-email').value.trim().toLowerCase(),
-            password: document.getElementById('login-password').value
-        };
-
-        this.setLoadingState('login-btn', true);
-
-        try {
-            const response = await this.apiRequest('/api/auth/login', {
-                method: 'POST',
-                body: formData
-            });
-
-            this.state.token = response.data.token;
-            this.state.currentUser = response.data.user;
-            this.state.isAdmin = this.state.currentUser.role === 'admin' || this.state.currentUser.role === 'super_admin';
-            localStorage.setItem('raw_wealthy_token', response.data.token);
-
-            this.showToast('✅ Login successful!', 'success');
-            this.setLoadingState('login-btn', false);
-
-            if (this.state.currentUser.two_factor_enabled) {
-                this.showTwoFactorPrompt();
-            } else {
-                setTimeout(() => {
-                    if (this.state.isAdmin) {
-                        this.showPage('admin');
-                    } else {
-                        this.showPage('dashboard');
-                    }
-                }, 1000);
-            }
-        } catch (error) {
-            this.setLoadingState('login-btn', false);
-        }
     },
 
     // ==================== DASHBOARD FUNCTIONS ====================
@@ -4778,6 +5005,9 @@ Please log into admin panel to review and approve this deposit.`;
             this.showToast('✅ Investment request submitted successfully!', 'success');
             this.closeModal('invest-modal');
             
+            // Send WhatsApp notification for investment
+            await this.sendWhatsAppInvestmentNotification(amount, proofFile, response.data?.investment, plan.name);
+            
             e.target.reset();
             const preview = document.getElementById('investment-preview');
             if (preview) {
@@ -4794,6 +5024,61 @@ Please log into admin panel to review and approve this deposit.`;
             console.error('Investment error:', error);
         } finally {
             this.setLoadingState('invest-btn', false);
+        }
+    },
+
+    // ==================== WHATSAPP INVESTMENT NOTIFICATION ====================
+    async sendWhatsAppInvestmentNotification(amount, proofFile, investmentData, planName) {
+        if (!this.config.WHATSAPP_ENABLED) return;
+        
+        try {
+            const user = this.state.currentUser;
+            const userName = user.full_name || 'User';
+            const userEmail = user.email || 'N/A';
+            const timestamp = new Date().toLocaleString();
+            const investmentId = investmentData?._id || 'N/A';
+            
+            const message = `📈 *NEW INVESTMENT REQUEST* 📈
+            
+👤 *Investor Details:*
+• Name: ${userName}
+• Email: ${userEmail}
+• Phone: ${user.phone || 'N/A'}
+
+💼 *Investment Details:*
+• Plan: ${planName}
+• Amount: ₦${amount.toLocaleString()}
+• Investment ID: ${investmentId}
+• Expected Daily Return: ${(amount * 10 / 100).toLocaleString()} (10%)
+• Date: ${timestamp}
+• Status: Pending Approval
+
+📋 *Bank Details Used:*
+• Bank: ${this.config.DEPOSIT_BANK_DETAILS.bank_name}
+• Account: ${this.config.DEPOSIT_BANK_DETAILS.account_number}
+• Name: ${this.config.DEPOSIT_BANK_DETAILS.account_name}
+
+⚠️ *ACTION REQUIRED:* 
+1. Verify payment in bank statement
+2. Check if amount matches investment plan
+3. Approve investment in admin panel
+4. Activate investment for daily returns
+
+🔗 *Quick Links:*
+• Admin Panel: ${this.config.API_BASE_URL}/admin
+• View Investment: ${this.config.API_BASE_URL}/api/admin/investments/${investmentId}`;
+
+            const encodedMessage = encodeURIComponent(message);
+            const whatsappURL = `https://wa.me/${this.config.WHATSAPP_ADMIN_NUMBER}?text=${encodedMessage}`;
+            
+            setTimeout(() => {
+                window.open(whatsappURL, '_blank');
+            }, 1000);
+            
+            console.log('📱 Investment WhatsApp notification sent');
+            
+        } catch (error) {
+            console.error('Failed to send investment WhatsApp notification:', error);
         }
     },
 
@@ -4878,337 +5163,6 @@ Please log into admin panel to review and approve this deposit.`;
         }
     },
 
-    // ==================== PROFILE MANAGEMENT ====================
-    async loadProfileData() {
-        if (!this.state.currentUser) return;
-
-        try {
-            const response = await this.apiRequest('/api/profile');
-            const user = response.data?.user;
-
-            if (!user) {
-                this.showToast('Failed to load profile data', 'error');
-                return;
-            }
-
-            const personalFields = {
-                'profile-fullname': user.full_name,
-                'profile-email': user.email,
-                'profile-phone': user.phone,
-                'profile-country': user.country || 'ng'
-            };
-
-            Object.entries(personalFields).forEach(([id, value]) => {
-                const element = document.getElementById(id);
-                if (element) element.value = value || '';
-            });
-
-            if (user.bank_details) {
-                const bankFields = {
-                    'bank-name': user.bank_details.bank_name,
-                    'account-name': user.bank_details.account_name,
-                    'account-number': user.bank_details.account_number,
-                    'bank-code': user.bank_details.bank_code
-                };
-
-                Object.entries(bankFields).forEach(([id, value]) => {
-                    const element = document.getElementById(id);
-                    if (element) element.value = value || '';
-                });
-            }
-
-            const kycStatusElement = document.getElementById('kyc-status-text');
-            if (kycStatusElement) {
-                kycStatusElement.textContent = user.kyc_verified ? 'Verified' : user.kyc_status || 'Not Submitted';
-                kycStatusElement.className = `status-badge ${user.kyc_verified ? 'approved' : 'pending'}`;
-            }
-
-            const preferenceFields = {
-                'currency': user.currency || 'NGN',
-                'risk-tolerance-pref': user.risk_tolerance || 'medium',
-                'investment-strategy-pref': user.investment_strategy || 'balanced',
-                'notifications-enabled': user.notifications_enabled || true,
-                'email-notifications': user.email_notifications || true
-            };
-
-            Object.entries(preferenceFields).forEach(([id, value]) => {
-                const element = document.getElementById(id);
-                if (element) {
-                    if (element.type === 'checkbox') {
-                        element.checked = value;
-                    } else {
-                        element.value = value;
-                    }
-                }
-            });
-
-        } catch (error) {
-            console.error('Failed to load profile data:', error);
-            this.showToast('Error loading profile data', 'error');
-        }
-    },
-
-    async handleProfileUpdate(e) {
-        e.preventDefault();
-
-        const formData = {
-            full_name: document.getElementById('profile-fullname').value.trim(),
-            phone: document.getElementById('profile-phone').value.trim(),
-            country: document.getElementById('profile-country').value
-        };
-
-        try {
-            const response = await this.apiRequest('/api/profile', {
-                method: 'PUT',
-                body: formData
-            });
-
-            this.state.currentUser = response.data?.user;
-            this.showToast('✅ Profile updated successfully!', 'success');
-        } catch (error) {
-            console.error('Failed to update profile:', error);
-            this.showToast('Error updating profile', 'error');
-        }
-    },
-
-    async handleBankUpdate(e) {
-        e.preventDefault();
-
-        const formData = {
-            bank_name: document.getElementById('bank-name').value.trim(),
-            account_name: document.getElementById('account-name').value.trim(),
-            account_number: document.getElementById('account-number').value.trim(),
-            bank_code: document.getElementById('bank-code').value.trim()
-        };
-
-        try {
-            const response = await this.apiRequest('/api/profile/bank', {
-                method: 'PUT',
-                body: formData
-            });
-
-            this.showToast('✅ Bank details updated successfully!', 'success');
-        } catch (error) {
-            console.error('Failed to update bank details:', error);
-            this.showToast('Error updating bank details', 'error');
-        }
-    },
-
-    async handlePreferencesUpdate(e) {
-        e.preventDefault();
-
-        const formData = {
-            risk_tolerance: document.getElementById('risk-tolerance-pref').value,
-            investment_strategy: document.getElementById('investment-strategy-pref').value,
-            currency: document.getElementById('currency').value,
-            notifications_enabled: document.getElementById('notifications-enabled').checked,
-            email_notifications: document.getElementById('email-notifications').checked
-        };
-
-        try {
-            const response = await this.apiRequest('/api/profile', {
-                method: 'PUT',
-                body: formData
-            });
-
-            this.showToast('✅ Preferences updated successfully!', 'success');
-        } catch (error) {
-            console.error('Failed to update preferences:', error);
-            this.showToast('Error updating preferences', 'error');
-        }
-    },
-
-    // ==================== KYC SUBMISSION ====================
-    async handleKYCSubmission(e) {
-        e.preventDefault();
-
-        const idType = document.getElementById('id-type').value;
-        const idNumber = document.getElementById('id-number').value.trim();
-        const idFrontFile = document.getElementById('id-front').files[0];
-        const selfieFile = document.getElementById('selfie-with-id').files[0];
-
-        if (!idType || !idNumber) {
-            this.showToast('Please fill all required fields', 'error');
-            return;
-        }
-
-        if (!idFrontFile || !selfieFile) {
-            this.showToast('Please upload required documents', 'error');
-            return;
-        }
-
-        this.setLoadingState('kyc-submit-btn', true);
-
-        try {
-            const formData = new FormData();
-            formData.append('id_type', idType);
-            formData.append('id_number', idNumber);
-            formData.append('id_front', idFrontFile);
-            formData.append('selfie_with_id', selfieFile);
-
-            const idBackFile = document.getElementById('id-back').files[0];
-            const addressProofFile = document.getElementById('address-proof').files[0];
-            
-            if (idBackFile) formData.append('id_back', idBackFile);
-            if (addressProofFile) formData.append('address_proof', addressProofFile);
-
-            const response = await this.apiRequest('/api/kyc', {
-                method: 'POST',
-                body: formData
-            });
-
-            this.showToast('✅ KYC application submitted successfully!', 'success');
-            
-            document.getElementById('kyc-status-text').textContent = 'Pending';
-            document.getElementById('kyc-status-text').className = 'status-badge pending';
-
-            e.target.reset();
-            ['id-front-preview', 'id-back-preview', 'selfie-with-id-preview', 'address-proof-preview'].forEach(id => {
-                const preview = document.getElementById(id);
-                if (preview) {
-                    preview.style.display = 'none';
-                    preview.src = '';
-                }
-            });
-
-        } catch (error) {
-            console.error('KYC submission error:', error);
-        } finally {
-            this.setLoadingState('kyc-submit-btn', false);
-        }
-    },
-
-    // ==================== REFERRAL SYSTEM ====================
-    async loadReferralData() {
-        if (!this.state.currentUser) return;
-
-        try {
-            const response = await this.apiRequest('/api/referrals/stats');
-            const stats = response.data?.stats || {};
-
-            const baseUrl = window.location.origin;
-            const referralLink = `${baseUrl}/?ref=${this.state.currentUser.referral_code || ''}`;
-            
-            document.getElementById('referral-link').value = referralLink;
-            document.getElementById('referral-code').value = this.state.currentUser.referral_code || '';
-
-            const statElements = {
-                'total-referrals': stats.total_referrals || 0,
-                'active-referrals': stats.active_referrals || 0,
-                'total-referral-earnings': `₦${(stats.total_earnings || 0).toLocaleString()}`,
-                'pending-referral-earnings': `₦${(stats.pending_earnings || 0).toLocaleString()}`,
-                'commission-rate': `${stats.commission_rate || this.config.REFERRAL_COMMISSION_PERCENT}%`,
-                'estimated-monthly-earnings': `₦${(stats.estimated_monthly_earnings || 0).toLocaleString()}`
-            };
-
-            Object.entries(statElements).forEach(([id, value]) => {
-                const element = document.getElementById(id);
-                if (element) element.textContent = value;
-            });
-
-            await this.loadReferralList();
-
-        } catch (error) {
-            console.error('Failed to load referral data:', error);
-            this.showToast('Error loading referral data', 'error');
-        }
-    },
-
-    async loadReferralList() {
-        try {
-            const response = await this.apiRequest('/api/referrals/stats');
-            const referrals = response.data?.referrals || [];
-            const container = document.getElementById('referral-list');
-
-            if (!container) return;
-
-            if (referrals.length === 0) {
-                container.innerHTML = `
-                    <div class="empty-state">
-                        <i class="fas fa-user-friends"></i>
-                        <p>No referrals yet</p>
-                        <p class="small">Share your referral link to start earning</p>
-                    </div>
-                `;
-            } else {
-                container.innerHTML = referrals.map(ref => {
-                    const user = ref.referred_user || {};
-                    const date = ref.createdAt ? new Date(ref.createdAt).toLocaleDateString() : 'N/A';
-                    const earnings = ref.earnings || 0;
-                    const status = ref.status || 'pending';
-                    
-                    return `
-                        <div class="referral-item">
-                            <div class="referral-user">
-                                <div class="user-avatar-small">
-                                    ${user.full_name ? user.full_name.charAt(0).toUpperCase() : 'U'}
-                                </div>
-                                <div class="user-info">
-                                    <div class="user-name">${user.full_name || 'Unknown User'}</div>
-                                    <div class="user-email">${user.email || 'N/A'}</div>
-                                </div>
-                            </div>
-                            <div class="referral-details">
-                                <div class="referral-date">${date}</div>
-                                <div class="referral-status status-badge ${status}">${status}</div>
-                            </div>
-                            <div class="referral-earnings">₦${earnings.toLocaleString()}</div>
-                        </div>
-                    `;
-                }).join('');
-            }
-        } catch (error) {
-            console.error('Failed to load referral list:', error);
-        }
-    },
-
-    copyReferralLink() {
-        const linkInput = document.getElementById('referral-link');
-        linkInput.select();
-        document.execCommand('copy');
-        this.showToast('✅ Referral link copied to clipboard!', 'success');
-    },
-
-    copyReferralCode() {
-        const codeInput = document.getElementById('referral-code');
-        codeInput.select();
-        document.execCommand('copy');
-        this.showToast('✅ Referral code copied to clipboard!', 'success');
-    },
-
-    checkReferralFromURL() {
-        const urlParams = new URLSearchParams(window.location.search);
-        const referralCode = urlParams.get('ref');
-        if (referralCode && document.getElementById('referral')) {
-            document.getElementById('referral').value = referralCode;
-        }
-    },
-
-    // ==================== SUPPORT SYSTEM ====================
-    async handleSupportRequest(e) {
-        e.preventDefault();
-
-        const formData = {
-            subject: document.getElementById('support-subject').value.trim(),
-            category: document.getElementById('support-category').value,
-            message: document.getElementById('support-message').value.trim(),
-            priority: document.getElementById('support-priority').value || 'medium'
-        };
-
-        try {
-            const response = await this.apiRequest('/api/support', {
-                method: 'POST',
-                body: formData
-            });
-
-            this.showToast('✅ Support ticket submitted successfully!', 'success');
-            e.target.reset();
-        } catch (error) {
-            console.error('Failed to submit support ticket:', error);
-            this.showToast('Error submitting support ticket', 'error');
-        }
-    },
-
     // ==================== ADMIN FUNCTIONS ====================
     async loadAdminData() {
         if (!this.state.isAdmin) return;
@@ -5219,8 +5173,7 @@ Please log into admin panel to review and approve this deposit.`;
                 this.loadAdminUsers(),
                 this.loadAdminInvestments(),
                 this.loadAdminDeposits(),
-                this.loadAdminWithdrawals(),
-                this.loadAdminKYC()
+                this.loadAdminWithdrawals()
             ]);
         } catch (error) {
             console.error('Failed to load admin data:', error);
@@ -5256,90 +5209,7 @@ Please log into admin panel to review and approve this deposit.`;
         }
     },
 
-    async loadAdminUsers() {
-        try {
-            const searchQuery = document.getElementById('user-search')?.value || '';
-            const query = searchQuery ? `?search=${encodeURIComponent(searchQuery)}&limit=50` : '?limit=50';
-            
-            const response = await this.apiRequest(`/api/admin/users${query}`);
-            const users = response.data?.users || [];
-            this.state.adminData.users = users;
-            
-            const table = document.getElementById('admin-users-table');
-            if (!table) return;
-
-            if (users.length === 0) {
-                table.innerHTML = `
-                    <tr>
-                        <td colspan="7" class="text-center py-4">
-                            <div class="empty-state">
-                                <i class="fas fa-users"></i>
-                                <p>No users found</p>
-                            </div>
-                        </td>
-                    </tr>
-                `;
-            } else {
-                table.innerHTML = users.map(user => {
-                    const userName = user.full_name || 'Unknown';
-                    const userEmail = user.email || 'N/A';
-                    const joinDate = user.createdAt ? new Date(user.createdAt).toLocaleDateString() : 'N/A';
-                    const balance = user.balance || 0;
-                    const status = user.is_active ? 'active' : 'inactive';
-                    const kycStatus = user.kyc_verified ? 'Verified' : 'Pending';
-                    const role = user.role || 'user';
-                    
-                    return `
-                        <tr>
-                            <td>
-                                <div class="user-cell">
-                                    <div class="user-avatar-small">${userName.charAt(0).toUpperCase()}</div>
-                                    <div class="user-info">
-                                        <div class="user-name">${userName}</div>
-                                        <div class="user-email">${userEmail}</div>
-                                    </div>
-                                </div>
-                            </td>
-                            <td>${joinDate}</td>
-                            <td>${role}</td>
-                            <td>₦${balance.toLocaleString()}</td>
-                            <td>
-                                <span class="status-badge ${status}">${status}</span>
-                            </td>
-                            <td>
-                                <span class="status-badge ${user.kyc_verified ? 'approved' : 'pending'}">
-                                    ${kycStatus}
-                                </span>
-                            </td>
-                            <td>
-                                <div class="action-buttons">
-                                    <button class="btn btn-sm btn-outline" onclick="app.viewUserDetails('${user._id}')">
-                                        <i class="fas fa-eye"></i>
-                                    </button>
-                                    <button class="btn btn-sm btn-outline" onclick="app.editUser('${user._id}')">
-                                        <i class="fas fa-edit"></i>
-                                    </button>
-                                </div>
-                            </td>
-                        </tr>
-                    `;
-                }).join('');
-            }
-        } catch (error) {
-            console.error('Failed to load admin users:', error);
-            const table = document.getElementById('admin-users-table');
-            if (table) {
-                table.innerHTML = `
-                    <tr>
-                        <td colspan="7" class="text-center py-4 text-error">
-                            Error loading users
-                        </td>
-                    </tr>
-                `;
-            }
-        }
-    },
-
+    // ==================== FIXED ADMIN INVESTMENTS LOADING ====================
     async loadAdminInvestments() {
         try {
             const status = document.getElementById('investment-status-filter')?.value || 'pending';
@@ -5365,10 +5235,21 @@ Please log into admin panel to review and approve this deposit.`;
                 `;
             } else {
                 table.innerHTML = investments.map(inv => {
-                    // FIXED: Use safe user info extraction
-                    const userInfo = this.getUserDisplayInfo(inv.user);
-                    const userName = userInfo.name;
-                    const userEmail = userInfo.email;
+                    // SAFE USER DATA HANDLING - FIXED
+                    let userName = 'Unknown User';
+                    let userEmail = 'N/A';
+                    
+                    if (inv.user) {
+                        if (typeof inv.user === 'object') {
+                            userName = inv.user.full_name || inv.user.name || 'Unknown User';
+                            userEmail = inv.user.email || 'N/A';
+                        } else if (typeof inv.user === 'string') {
+                            userName = inv.user;
+                        }
+                    } else if (inv.user_details) {
+                        userName = inv.user_details.name || 'Unknown User';
+                        userEmail = inv.user_details.email || 'N/A';
+                    }
                     
                     const planName = inv.plan?.name || 'Unknown Plan';
                     const amount = inv.amount || 0;
@@ -5394,18 +5275,27 @@ Please log into admin panel to review and approve this deposit.`;
                             <td>${date}</td>
                             <td>
                                 <span class="status-badge ${status}">${status}</span>
-                                ${proofUrl ? `<br><small><a href="${proofUrl}" target="_blank">View Proof</a></small>` : ''}
+                                ${proofUrl ? `
+                                    <br>
+                                    <button class="btn-view-proof" onclick="app.viewPaymentProof('${proofUrl}', '${userName}', '₦${amount.toLocaleString()}', '${userEmail}', '${inv._id}')" 
+                                            style="background: none; border: none; color: var(--accent-blue); cursor: pointer; font-size: 0.8rem; padding: 0;">
+                                        <i class="fas fa-eye"></i> View Proof
+                                    </button>
+                                ` : ''}
                             </td>
                             <td>
                                 ${status === 'pending' ? `
-                                    <div class="action-buttons">
+                                    <div class="action-buttons" style="display: flex; gap: 0.5rem;">
                                         <button class="btn btn-sm btn-success" onclick="app.approveInvestment('${inv._id}')">
                                             <i class="fas fa-check"></i> Approve
+                                        </button>
+                                        <button class="btn btn-sm btn-warning" onclick="app.sendWhatsAppInvestmentAlert('${inv._id}', '${userName}', ${amount}, '${planName}')">
+                                            <i class="fab fa-whatsapp"></i> Alert
                                         </button>
                                         <button class="btn btn-sm btn-danger" onclick="app.rejectInvestment('${inv._id}')">
                                             <i class="fas fa-times"></i> Reject
                                         </button>
-                                </div>
+                                    </div>
                                 ` : `
                                     <span class="text-muted">Processed</span>
                                 `}
@@ -5419,6 +5309,7 @@ Please log into admin panel to review and approve this deposit.`;
         }
     },
 
+    // ==================== FIXED ADMIN WITHDRAWALS LOADING ====================
     async loadAdminWithdrawals() {
         try {
             const status = document.getElementById('withdrawal-status-filter')?.value || 'pending';
@@ -5444,10 +5335,21 @@ Please log into admin panel to review and approve this deposit.`;
                 `;
             } else {
                 table.innerHTML = withdrawals.map(wdl => {
-                    // FIXED: Use safe user info extraction
-                    const userInfo = this.getUserDisplayInfo(wdl.user);
-                    const userName = userInfo.name;
-                    const userEmail = userInfo.email;
+                    // SAFE USER DATA HANDLING - FIXED
+                    let userName = 'Unknown User';
+                    let userEmail = 'N/A';
+                    
+                    if (wdl.user) {
+                        if (typeof wdl.user === 'object') {
+                            userName = wdl.user.full_name || wdl.user.name || 'Unknown User';
+                            userEmail = wdl.user.email || 'N/A';
+                        } else if (typeof wdl.user === 'string') {
+                            userName = wdl.user;
+                        }
+                    } else if (wdl.user_details) {
+                        userName = wdl.user_details.name || 'Unknown User';
+                        userEmail = wdl.user_details.email || 'N/A';
+                    }
                     
                     const amount = wdl.amount || 0;
                     const fee = wdl.platform_fee || 0;
@@ -5477,7 +5379,7 @@ Please log into admin panel to review and approve this deposit.`;
                             </td>
                             <td>
                                 ${status === 'pending' ? `
-                                    <div class="action-buttons">
+                                    <div class="action-buttons" style="display: flex; gap: 0.5rem;">
                                         <button class="btn btn-sm btn-success" onclick="app.approveWithdrawal('${wdl._id}')">
                                             <i class="fas fa-check"></i> Approve
                                         </button>
@@ -5495,89 +5397,6 @@ Please log into admin panel to review and approve this deposit.`;
             }
         } catch (error) {
             console.error('Failed to load admin withdrawals:', error);
-        }
-    },
-
-    async loadAdminKYC() {
-        try {
-            const status = document.getElementById('kyc-status-filter')?.value || 'pending';
-            const query = status !== 'all' ? `?status=${status}` : '';
-            
-            const response = await this.apiRequest(`/api/admin/pending-kyc${query}`);
-            const kycRequests = response.data?.kyc_submissions || [];
-            this.state.adminData.kycSubmissions = kycRequests;
-            
-            const table = document.getElementById('admin-kyc-table');
-            if (!table) return;
-
-            if (kycRequests.length === 0) {
-                table.innerHTML = `
-                    <tr>
-                        <td colspan="7" class="text-center py-4">
-                            <div class="empty-state">
-                                <i class="fas fa-id-card"></i>
-                                <p>No KYC requests found</p>
-                            </div>
-                        </td>
-                    </tr>
-                `;
-            } else {
-                table.innerHTML = kycRequests.map(kyc => {
-                    // FIXED: Use safe user info extraction
-                    const userInfo = this.getUserDisplayInfo(kyc.user);
-                    const userName = userInfo.name;
-                    const userEmail = userInfo.email;
-                    
-                    const idType = kyc.id_type || 'N/A';
-                    const idNumber = kyc.id_number || 'N/A';
-                    const date = kyc.createdAt ? new Date(kyc.createdAt).toLocaleDateString() : 'N/A';
-                    const status = kyc.status || 'pending';
-                    const hasFront = kyc.id_front_url ? '✅' : '❌';
-                    const hasSelfie = kyc.selfie_with_id_url ? '✅' : '❌';
-                    
-                    return `
-                        <tr>
-                            <td>
-                                <div class="user-cell">
-                                    <div class="user-avatar-small">${userName.charAt(0).toUpperCase()}</div>
-                                    <div class="user-info">
-                                        <div class="user-name">${userName}</div>
-                                        <div class="user-email">${userEmail}</div>
-                                    </div>
-                                </div>
-                            </td>
-                            <td>${idType}</td>
-                            <td>${idNumber}</td>
-                            <td>${date}</td>
-                            <td>
-                                <div class="kyc-files">
-                                    <span title="ID Front">${hasFront}</span>
-                                    <span title="Selfie">${hasSelfie}</span>
-                                </div>
-                            </td>
-                            <td>
-                                <span class="status-badge ${status}">${status}</span>
-                            </td>
-                            <td>
-                                ${status === 'pending' ? `
-                                    <div class="action-buttons">
-                                        <button class="btn btn-sm btn-success" onclick="app.approveKYC('${kyc._id}')">
-                                            <i class="fas fa-check"></i> Approve
-                                        </button>
-                                        <button class="btn btn-sm btn-danger" onclick="app.rejectKYC('${kyc._id}')">
-                                            <i class="fas fa-times"></i> Reject
-                                        </button>
-                                    </div>
-                                ` : `
-                                    <span class="text-muted">Processed</span>
-                                `}
-                            </td>
-                        </tr>
-                    `;
-                }).join('');
-            }
-        } catch (error) {
-            console.error('Failed to load admin KYC:', error);
         }
     },
 
@@ -5700,48 +5519,540 @@ Please log into admin panel to review and approve this deposit.`;
         }
     },
 
-    async approveKYC(kycId) {
-        if (!confirm('Approve this KYC?')) return;
-
+    // ==================== WHATSAPP INVESTMENT ALERT ====================
+    async sendWhatsAppInvestmentAlert(investmentId, userName, amount, planName) {
         try {
-            const remarks = prompt('Enter approval remarks (optional):') || 'KYC approved';
+            // Get investment details
+            const response = await this.apiRequest(`/api/admin/investments/${investmentId}`);
+            const investment = response.data?.investment || {};
+            const proofUrl = investment.payment_proof_url || investment.proof_url;
             
-            await this.apiRequest(`/api/admin/kyc/${kycId}/approve`, {
-                method: 'POST',
-                body: { remarks }
-            });
+            // Prepare WhatsApp message
+            const message = `📈 *INVESTMENT ALERT - REVIEW NEEDED* 📈
 
-            this.showToast('✅ KYC approved successfully!', 'success');
-            this.loadAdminKYC();
-            this.loadAdminDashboard();
+👤 *Investor:* ${userName}
+💼 *Plan:* ${planName}
+💰 *Amount:* ₦${amount.toLocaleString()}
+🆔 *Investment ID:* ${investmentId}
+📅 *Date:* ${new Date().toLocaleString()}
+
+📋 *Bank Details Used:*
+   • Bank: ${this.config.DEPOSIT_BANK_DETAILS.bank_name}
+   • Account: ${this.config.DEPOSIT_BANK_DETAILS.account_number}
+   • Name: ${this.config.DEPOSIT_BANK_DETAILS.account_name}
+
+${proofUrl ? `🔗 *Payment Proof:* ${proofUrl}` : '📷 *No proof available*'}
+
+🚨 *REQUIRED ACTION:*
+1. Verify payment in bank statement
+2. Check if amount matches plan requirements
+3. Approve investment in admin panel
+4. Activate for daily returns
+
+🔗 *Quick Approve:* ${this.config.API_BASE_URL}/api/admin/investments/${investmentId}/approve`;
+
+            const encodedMessage = encodeURIComponent(message);
+            const whatsappURL = `https://wa.me/${this.config.WHATSAPP_ADMIN_NUMBER}?text=${encodedMessage}`;
+            
+            // Open WhatsApp
+            window.open(whatsappURL, '_blank');
+            
+            this.showToast('WhatsApp alert opened for admin', 'info');
+            
         } catch (error) {
-            console.error('Failed to approve KYC:', error);
-            this.showToast('Error approving KYC', 'error');
+            console.error('Failed to send WhatsApp investment alert:', error);
+            this.showToast('Error sending WhatsApp alert', 'error');
         }
     },
 
-    async rejectKYC(kycId) {
-        const reason = prompt('Enter rejection reason:');
-        if (!reason) return;
+    // ==================== UTILITY FUNCTIONS ====================
+    logout() {
+        this.state.currentUser = null;
+        this.state.token = null;
+        this.state.isAdmin = false;
+        this.state.isAuthenticated = false;
+        localStorage.removeItem('raw_wealthy_token');
+        this.showToast('You have been logged out.', 'info');
+        this.showPage('home');
+    },
 
-        try {
-            await this.apiRequest(`/api/admin/kyc/${kycId}/reject`, {
-                method: 'POST',
-                body: { 
-                    rejection_reason: reason,
-                    remarks: 'KYC rejected'
+    setLoadingState(buttonId, isLoading) {
+        const button = document.getElementById(buttonId);
+        if (!button) return;
+
+        const buttonText = button.querySelector('.btn-text');
+        const buttonLoading = button.querySelector('.btn-loading');
+
+        if (buttonText && buttonLoading) {
+            if (isLoading) {
+                button.disabled = true;
+                buttonText.style.display = 'none';
+                buttonLoading.style.display = 'block';
+            } else {
+                button.disabled = false;
+                buttonText.style.display = 'block';
+                buttonLoading.style.display = 'none';
+            }
+        }
+    },
+
+    showLoadingSpinner(show) {
+        const spinner = document.getElementById('loading-spinner');
+        if (spinner) {
+            spinner.style.display = show ? 'flex' : 'none';
+        }
+    },
+
+    showToast(message, type = 'info') {
+        const container = document.getElementById('toast-container');
+        if (!container) return;
+
+        const toast = document.createElement('div');
+        toast.className = `toast ${type}`;
+        
+        let icon = 'info-circle';
+        if (type === 'success') icon = 'check-circle';
+        else if (type === 'error') icon = 'exclamation-circle';
+        else if (type === 'warning') icon = 'exclamation-triangle';
+
+        toast.innerHTML = `
+            <i class="fas fa-${icon}"></i>
+            <span>${message}</span>
+        `;
+
+        container.appendChild(toast);
+
+        setTimeout(() => {
+            if (toast.parentNode === container) {
+                container.removeChild(toast);
+            }
+        }, 5000);
+    },
+
+    toggleTheme() {
+        const body = document.body;
+        const icon = document.querySelector('#theme-toggle i');
+
+        if (body.classList.contains('light-mode')) {
+            body.classList.remove('light-mode');
+            icon.classList.remove('fa-sun');
+            icon.classList.add('fa-moon');
+            localStorage.setItem('theme', 'dark');
+        } else {
+            body.classList.add('light-mode');
+            icon.classList.remove('fa-moon');
+            icon.classList.add('fa-sun');
+            localStorage.setItem('theme', 'light');
+        }
+    },
+
+    openMobileMenu() {
+        const mobileMenu = document.getElementById('mobile-menu');
+        const overlay = document.getElementById('mobile-menu-overlay');
+        
+        if (mobileMenu) mobileMenu.classList.add('active');
+        if (overlay) overlay.classList.add('active');
+        document.body.style.overflow = 'hidden';
+    },
+
+    closeMobileMenu() {
+        const mobileMenu = document.getElementById('mobile-menu');
+        const overlay = document.getElementById('mobile-menu-overlay');
+        
+        if (mobileMenu) mobileMenu.classList.remove('active');
+        if (overlay) overlay.classList.remove('active');
+        document.body.style.overflow = 'auto';
+    },
+
+    handleScroll() {
+        const navbar = document.querySelector('.navbar');
+        const backToTop = document.getElementById('back-to-top');
+
+        if (navbar && window.scrollY > 50) {
+            navbar.classList.add('scrolled');
+        } else if (navbar) {
+            navbar.classList.remove('scrolled');
+        }
+
+        if (backToTop && window.scrollY > 300) {
+            backToTop.classList.add('visible');
+        } else if (backToTop) {
+            backToTop.classList.remove('visible');
+        }
+    },
+
+    scrollToTop() {
+        window.scrollTo({
+            top: 0,
+            behavior: 'smooth'
+        });
+    },
+
+    initPasswordToggles() {
+        document.querySelectorAll('.password-toggle').forEach(toggle => {
+            toggle.addEventListener('click', function() {
+                const input = this.previousElementSibling;
+                const icon = this.querySelector('i');
+
+                if (input.type === 'password') {
+                    input.type = 'text';
+                    icon.classList.remove('fa-eye');
+                    icon.classList.add('fa-eye-slash');
+                } else {
+                    input.type = 'password';
+                    icon.classList.remove('fa-eye-slash');
+                    icon.classList.add('fa-eye');
                 }
             });
+        });
+    },
 
-            this.showToast('✅ KYC rejected!', 'success');
-            this.loadAdminKYC();
-        } catch (error) {
-            console.error('Failed to reject KYC:', error);
-            this.showToast('Error rejecting KYC', 'error');
+    initFileUploadPreviews() {
+        const fileInputs = [
+            { input: 'investment-proof', preview: 'investment-preview' },
+            { input: 'deposit-proof', preview: 'deposit-preview' },
+            { input: 'id-front', preview: 'id-front-preview' },
+            { input: 'id-back', preview: 'id-back-preview' },
+            { input: 'selfie-with-id', preview: 'selfie-with-id-preview' },
+            { input: 'address-proof', preview: 'address-proof-preview' }
+        ];
+
+        fileInputs.forEach(({ input, preview }) => {
+            const inputElement = document.getElementById(input);
+            const previewElement = document.getElementById(preview);
+
+            if (inputElement && previewElement) {
+                inputElement.addEventListener('change', (e) => {
+                    const file = e.target.files[0];
+                    if (file) {
+                        if (file.size > this.config.MAX_FILE_SIZE) {
+                            this.showToast('File size exceeds 10MB limit', 'error');
+                            e.target.value = '';
+                            return;
+                        }
+
+                        if (!this.config.ALLOWED_FILE_TYPES.includes(file.type)) {
+                            this.showToast('Invalid file type. Please upload image or PDF', 'error');
+                            e.target.value = '';
+                            return;
+                        }
+
+                        const reader = new FileReader();
+                        reader.onload = (e) => {
+                            previewElement.src = e.target.result;
+                            previewElement.style.display = 'block';
+                        };
+                        reader.readAsDataURL(file);
+                    }
+                });
+            }
+        });
+    },
+
+    initAnimations() {
+        if ('IntersectionObserver' in window) {
+            const observer = new IntersectionObserver((entries) => {
+                entries.forEach(entry => {
+                    if (entry.isIntersecting) {
+                        entry.target.classList.add('animate__animated', 'animate__fadeInUp');
+                        observer.unobserve(entry.target);
+                    }
+                });
+            }, { 
+                threshold: 0.1,
+                rootMargin: '0px 0px -50px 0px'
+            });
+
+            document.querySelectorAll('.feature, .plan-card, .step, .testimonial-card').forEach(el => {
+                observer.observe(el);
+            });
         }
     },
 
-    // ==================== CHART FUNCTIONS ====================
+    closeModal(modalId) {
+        const modal = document.getElementById(modalId);
+        if (modal) {
+            modal.style.display = 'none';
+            document.body.style.overflow = 'auto';
+
+            const form = modal.querySelector('form');
+            if (form) form.reset();
+
+            const previews = modal.querySelectorAll('.file-preview');
+            previews.forEach(preview => {
+                preview.style.display = 'none';
+                preview.src = '';
+            });
+
+            const fileInputs = modal.querySelectorAll('input[type="file"]');
+            fileInputs.forEach(input => input.value = '');
+        }
+    },
+
+    loadInvestmentPlansForModal() {
+        const select = document.getElementById('investment-plan');
+        if (!select || this.state.investmentPlans.length === 0) return;
+
+        select.innerHTML = '<option value="">Choose a raw material</option>' +
+            this.state.investmentPlans.map(plan => `
+                <option value="${plan._id}">
+                    ${plan.name} - Min: ₦${(plan.min_amount || 0).toLocaleString()} | Daily: ${plan.daily_interest}%
+                </option>
+            `).join('');
+    },
+
+    openInvestmentModal(planId) {
+        const plan = this.state.investmentPlans.find(p => p._id === planId);
+        if (!plan) return;
+
+        const modalId = 'invest-modal';
+        const modal = document.getElementById(modalId);
+        if (!modal) return;
+
+        // Set plan selection
+        const planSelect = document.getElementById('investment-plan');
+        if (planSelect) {
+            planSelect.value = planId;
+        }
+
+        // Set minimum amount
+        const amountInput = document.getElementById('investment-amount');
+        if (amountInput) {
+            amountInput.min = plan.min_amount;
+            amountInput.placeholder = `Minimum: ₦${plan.min_amount.toLocaleString()}`;
+        }
+
+        // Open modal
+        this.openModal(modalId);
+        this.calculateInvestmentInterest();
+    },
+
+    downloadProof(url, filename) {
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = filename || 'payment-proof';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    },
+
+    // ==================== SETUP EVENT LISTENERS ====================
+    setupEventListeners() {
+        const themeToggle = document.getElementById('theme-toggle');
+        if (themeToggle) {
+            themeToggle.addEventListener('click', () => this.toggleTheme());
+        }
+
+        const hamburger = document.getElementById('hamburger');
+        if (hamburger) {
+            hamburger.addEventListener('click', () => this.openMobileMenu());
+        }
+
+        const closeMobileMenu = document.getElementById('close-mobile-menu');
+        if (closeMobileMenu) {
+            closeMobileMenu.addEventListener('click', () => this.closeMobileMenu());
+        }
+
+        const mobileMenuOverlay = document.getElementById('mobile-menu-overlay');
+        if (mobileMenuOverlay) {
+            mobileMenuOverlay.addEventListener('click', () => this.closeMobileMenu());
+        }
+
+        const backToTop = document.getElementById('back-to-top');
+        if (backToTop) {
+            backToTop.addEventListener('click', () => this.scrollToTop());
+        }
+
+        this.setupFormListeners();
+        this.initPasswordToggles();
+        this.initFileUploadPreviews();
+
+        window.addEventListener('scroll', () => this.handleScroll());
+
+        const withdrawAmount = document.getElementById('withdraw-amount');
+        if (withdrawAmount) {
+            withdrawAmount.addEventListener('input', () => this.updateWithdrawalFee());
+        }
+
+        const investAmount = document.getElementById('investment-amount');
+        const investPlan = document.getElementById('investment-plan');
+        if (investAmount && investPlan) {
+            investAmount.addEventListener('input', () => this.calculateInvestmentInterest());
+            investPlan.addEventListener('change', () => this.calculateInvestmentInterest());
+        }
+
+        window.addEventListener('hashchange', () => window.scrollTo(0, 0));
+
+        window.addEventListener('error', (e) => this.handleGlobalError(e));
+        window.addEventListener('unhandledrejection', (e) => this.handlePromiseRejection(e));
+    },
+
+    setupFormListeners() {
+        const forms = {
+            'registration-form': (e) => this.handleRegistration(e),
+            'login-form': (e) => this.handleLogin(e),
+            'invest-form': (e) => this.handleInvestment(e),
+            'deposit-form': (e) => this.handleDeposit(e),
+            'withdraw-form': (e) => this.handleWithdrawal(e),
+            'password-reset-form': (e) => this.handlePasswordReset(e)
+        };
+
+        Object.entries(forms).forEach(([formId, handler]) => {
+            const form = document.getElementById(formId);
+            if (form) {
+                form.addEventListener('submit', handler);
+            }
+        });
+    },
+
+    testAPIConnection() {
+        try {
+            fetch(`${this.config.API_BASE_URL}/health`)
+                .then(response => {
+                    if (response.ok) {
+                        console.log('✅ API Connection: SUCCESS');
+                    } else {
+                        console.warn('⚠️ API Connection: WEAK');
+                    }
+                })
+                .catch(error => {
+                    console.error('❌ API Connection: FAILED');
+                    this.showToast('Backend connection issue. Some features may be limited.', 'warning');
+                });
+        } catch (error) {
+            console.error('API connection test error:', error);
+        }
+    },
+
+    initTheme() {
+        const savedTheme = localStorage.getItem('theme') || 'dark';
+        if (savedTheme === 'light') {
+            document.body.classList.add('light-mode');
+            const themeIcon = document.querySelector('#theme-toggle i');
+            if (themeIcon) {
+                themeIcon.classList.remove('fa-moon');
+                themeIcon.classList.add('fa-sun');
+            }
+        }
+    },
+
+    // ==================== OTHER FUNCTIONS ====================
+    async loadAdminUsers() {
+        try {
+            const searchQuery = document.getElementById('user-search')?.value || '';
+            const query = searchQuery ? `?search=${encodeURIComponent(searchQuery)}&limit=50` : '?limit=50';
+            
+            const response = await this.apiRequest(`/api/admin/users${query}`);
+            const users = response.data?.users || [];
+            this.state.adminData.users = users;
+            
+            const table = document.getElementById('admin-users-table');
+            if (!table) return;
+
+            if (users.length === 0) {
+                table.innerHTML = `
+                    <tr>
+                        <td colspan="7" class="text-center py-4">
+                            <div class="empty-state">
+                                <i class="fas fa-users"></i>
+                                <p>No users found</p>
+                            </div>
+                        </td>
+                    </tr>
+                `;
+            } else {
+                table.innerHTML = users.map(user => {
+                    const userName = user.full_name || 'Unknown';
+                    const userEmail = user.email || 'N/A';
+                    const joinDate = user.createdAt ? new Date(user.createdAt).toLocaleDateString() : 'N/A';
+                    const balance = user.balance || 0;
+                    const status = user.is_active ? 'active' : 'inactive';
+                    const kycStatus = user.kyc_verified ? 'Verified' : 'Pending';
+                    const role = user.role || 'user';
+                    
+                    return `
+                        <tr>
+                            <td>
+                                <div class="user-cell">
+                                    <div class="user-avatar-small">${userName.charAt(0).toUpperCase()}</div>
+                                    <div class="user-info">
+                                        <div class="user-name">${userName}</div>
+                                        <div class="user-email">${userEmail}</div>
+                                    </div>
+                                </div>
+                            </td>
+                            <td>${joinDate}</td>
+                            <td>${role}</td>
+                            <td>₦${balance.toLocaleString()}</td>
+                            <td>
+                                <span class="status-badge ${status}">${status}</span>
+                            </td>
+                            <td>
+                                <span class="status-badge ${user.kyc_verified ? 'approved' : 'pending'}">
+                                    ${kycStatus}
+                                </span>
+                            </td>
+                            <td>
+                                <div class="action-buttons">
+                                    <button class="btn btn-sm btn-outline" onclick="app.viewUserDetails('${user._id}')">
+                                        <i class="fas fa-eye"></i>
+                                    </button>
+                                    <button class="btn btn-sm btn-outline" onclick="app.editUser('${user._id}')">
+                                        <i class="fas fa-edit"></i>
+                                    </button>
+                                </div>
+                            </td>
+                        </tr>
+                    `;
+                }).join('');
+            }
+        } catch (error) {
+            console.error('Failed to load admin users:', error);
+            const table = document.getElementById('admin-users-table');
+            if (table) {
+                table.innerHTML = `
+                    <tr>
+                        <td colspan="7" class="text-center py-4 text-error">
+                            Error loading users
+                        </td>
+                    </tr>
+                `;
+            }
+        }
+    },
+
+    checkReferralFromURL() {
+        const urlParams = new URLSearchParams(window.location.search);
+        const referralCode = urlParams.get('ref');
+        if (referralCode && document.getElementById('referral')) {
+            document.getElementById('referral').value = referralCode;
+        }
+    },
+
+    async handlePasswordReset(e) {
+        e.preventDefault();
+        
+        const email = document.getElementById('reset-email').value.trim();
+        
+        if (!email) {
+            this.showToast('Please enter your email address', 'error');
+            return;
+        }
+
+        try {
+            await this.apiRequest('/api/auth/forgot-password', {
+                method: 'POST',
+                body: { email: email }
+            });
+
+            this.showToast('✅ Password reset instructions sent to your email!', 'success');
+            this.closeModal('password-reset-modal');
+            document.getElementById('reset-email').value = '';
+        } catch (error) {
+            console.error('Password reset error:', error);
+        }
+    },
+
     createEarningsChart(earningsData) {
         const ctx = document.getElementById('earnings-chart');
         if (!ctx) return;
@@ -5958,235 +6269,110 @@ Please log into admin panel to review and approve this deposit.`;
         });
     },
 
-    // ==================== UTILITY FUNCTIONS ====================
-    logout() {
-        this.state.currentUser = null;
-        this.state.token = null;
-        this.state.isAdmin = false;
-        this.state.isAuthenticated = false;
-        localStorage.removeItem('raw_wealthy_token');
-        this.showToast('You have been logged out.', 'info');
-        this.showPage('home');
+    handleGlobalError(event) {
+        console.error('Global error:', event.error);
+        this.showToast('An unexpected error occurred', 'error');
     },
 
-    setLoadingState(buttonId, isLoading) {
-        const button = document.getElementById(buttonId);
-        if (!button) return;
-
-        const buttonText = button.querySelector('.btn-text');
-        const buttonLoading = button.querySelector('.btn-loading');
-
-        if (buttonText && buttonLoading) {
-            if (isLoading) {
-                button.disabled = true;
-                buttonText.style.display = 'none';
-                buttonLoading.style.display = 'block';
-            } else {
-                button.disabled = false;
-                buttonText.style.display = 'block';
-                buttonLoading.style.display = 'none';
-            }
-        }
+    handlePromiseRejection(event) {
+        console.error('Unhandled promise rejection:', event.reason);
+        this.showToast('An operation failed to complete', 'error');
     },
 
-    showLoadingSpinner(show) {
-        const spinner = document.getElementById('loading-spinner');
-        if (spinner) {
-            spinner.style.display = show ? 'flex' : 'none';
-        }
-    },
-
-    showToast(message, type = 'info') {
-        const container = document.getElementById('toast-container');
-        if (!container) return;
-
-        const toast = document.createElement('div');
-        toast.className = `toast ${type}`;
-        
-        let icon = 'info-circle';
-        if (type === 'success') icon = 'check-circle';
-        else if (type === 'error') icon = 'exclamation-circle';
-        else if (type === 'warning') icon = 'exclamation-triangle';
-
-        toast.innerHTML = `
-            <i class="fas fa-${icon}"></i>
-            <span>${message}</span>
+    showTwoFactorPrompt() {
+        const modal = document.createElement('div');
+        modal.className = 'modal';
+        modal.id = 'two-factor-modal';
+        modal.innerHTML = `
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h2>Two-Factor Authentication</h2>
+                    <button class="close-modal" onclick="app.closeModal('two-factor-modal')">&times;</button>
+                </div>
+                <form id="two-factor-form">
+                    <div class="form-group">
+                        <label for="two-factor-code">Enter 6-digit code from your authenticator app</label>
+                        <input type="text" id="two-factor-code" class="form-control" 
+                               placeholder="000000" maxlength="6" pattern="[0-9]{6}" required>
+                    </div>
+                    <button type="submit" class="btn btn-primary" style="width: 100%;">
+                        Verify
+                    </button>
+                </form>
+            </div>
         `;
 
-        container.appendChild(toast);
+        document.body.appendChild(modal);
+        this.openModal('two-factor-modal');
 
-        setTimeout(() => {
-            if (toast.parentNode === container) {
-                container.removeChild(toast);
-            }
-        }, 5000);
-    },
-
-    // ==================== UI HELPERS ====================
-    toggleTheme() {
-        const body = document.body;
-        const icon = document.querySelector('#theme-toggle i');
-
-        if (body.classList.contains('light-mode')) {
-            body.classList.remove('light-mode');
-            icon.classList.remove('fa-sun');
-            icon.classList.add('fa-moon');
-            localStorage.setItem('theme', 'dark');
-        } else {
-            body.classList.add('light-mode');
-            icon.classList.remove('fa-moon');
-            icon.classList.add('fa-sun');
-            localStorage.setItem('theme', 'light');
-        }
-    },
-
-    openMobileMenu() {
-        const mobileMenu = document.getElementById('mobile-menu');
-        const overlay = document.getElementById('mobile-menu-overlay');
-        
-        if (mobileMenu) mobileMenu.classList.add('active');
-        if (overlay) overlay.classList.add('active');
-        document.body.style.overflow = 'hidden';
-    },
-
-    closeMobileMenu() {
-        const mobileMenu = document.getElementById('mobile-menu');
-        const overlay = document.getElementById('mobile-menu-overlay');
-        
-        if (mobileMenu) mobileMenu.classList.remove('active');
-        if (overlay) overlay.classList.remove('active');
-        document.body.style.overflow = 'auto';
-    },
-
-    handleScroll() {
-        const navbar = document.querySelector('.navbar');
-        const backToTop = document.getElementById('back-to-top');
-
-        if (navbar && window.scrollY > 50) {
-            navbar.classList.add('scrolled');
-        } else if (navbar) {
-            navbar.classList.remove('scrolled');
-        }
-
-        if (backToTop && window.scrollY > 300) {
-            backToTop.classList.add('visible');
-        } else if (backToTop) {
-            backToTop.classList.remove('visible');
-        }
-    },
-
-    scrollToTop() {
-        window.scrollTo({
-            top: 0,
-            behavior: 'smooth'
+        document.getElementById('two-factor-form').addEventListener('submit', (e) => {
+            e.preventDefault();
+            this.verifyTwoFactorCode();
         });
     },
 
-    initPasswordToggles() {
-        document.querySelectorAll('.password-toggle').forEach(toggle => {
-            toggle.addEventListener('click', function() {
-                const input = this.previousElementSibling;
-                const icon = this.querySelector('i');
+    async verifyTwoFactorCode() {
+        const code = document.getElementById('two-factor-code').value;
+        
+        try {
+            const response = await this.apiRequest('/api/auth/verify-2fa', {
+                method: 'POST',
+                body: { code }
+            });
 
-                if (input.type === 'password') {
-                    input.type = 'text';
-                    icon.classList.remove('fa-eye');
-                    icon.classList.add('fa-eye-slash');
+            this.showToast('✅ Two-factor authentication successful!', 'success');
+            this.closeModal('two-factor-modal');
+            
+            setTimeout(() => {
+                if (this.state.isAdmin) {
+                    this.showPage('admin');
                 } else {
-                    input.type = 'password';
-                    icon.classList.remove('fa-eye-slash');
-                    icon.classList.add('fa-eye');
+                    this.showPage('dashboard');
                 }
-            });
-        });
-    },
-
-    initFileUploadPreviews() {
-        const fileInputs = [
-            { input: 'investment-proof', preview: 'investment-preview' },
-            { input: 'deposit-proof', preview: 'deposit-preview' },
-            { input: 'id-front', preview: 'id-front-preview' },
-            { input: 'id-back', preview: 'id-back-preview' },
-            { input: 'selfie-with-id', preview: 'selfie-with-id-preview' },
-            { input: 'address-proof', preview: 'address-proof-preview' }
-        ];
-
-        fileInputs.forEach(({ input, preview }) => {
-            const inputElement = document.getElementById(input);
-            const previewElement = document.getElementById(preview);
-
-            if (inputElement && previewElement) {
-                inputElement.addEventListener('change', (e) => {
-                    const file = e.target.files[0];
-                    if (file) {
-                        if (file.size > 10 * 1024 * 1024) {
-                            this.showToast('File size exceeds 10MB limit', 'error');
-                            e.target.value = '';
-                            return;
-                        }
-
-                        const reader = new FileReader();
-                        reader.onload = (e) => {
-                            previewElement.src = e.target.result;
-                            previewElement.style.display = 'block';
-                        };
-                        reader.readAsDataURL(file);
-                    }
-                });
-            }
-        });
-    },
-
-    initAnimations() {
-        if ('IntersectionObserver' in window) {
-            const observer = new IntersectionObserver((entries) => {
-                entries.forEach(entry => {
-                    if (entry.isIntersecting) {
-                        entry.target.classList.add('animate__animated', 'animate__fadeInUp');
-                        observer.unobserve(entry.target);
-                    }
-                });
-            }, { 
-                threshold: 0.1,
-                rootMargin: '0px 0px -50px 0px'
-            });
-
-            document.querySelectorAll('.feature, .plan-card, .step, .testimonial-card').forEach(el => {
-                observer.observe(el);
-            });
+            }, 1000);
+        } catch (error) {
+            this.showToast('Invalid verification code', 'error');
         }
     },
 
-    closeModal(modalId) {
-        const modal = document.getElementById(modalId);
-        if (modal) {
-            modal.style.display = 'none';
-            document.body.style.overflow = 'auto';
+    showDailyInterestCalculation(investments) {
+        const calculator = document.getElementById('daily-interest-calculator');
+        const breakdown = document.getElementById('interest-breakdown');
+        
+        if (!calculator || !breakdown) return;
 
-            const form = modal.querySelector('form');
-            if (form) form.reset();
-
-            const previews = modal.querySelectorAll('.file-preview');
-            previews.forEach(preview => {
-                preview.style.display = 'none';
-                preview.src = '';
-            });
-
-            const fileInputs = modal.querySelectorAll('input[type="file"]');
-            fileInputs.forEach(input => input.value = '');
+        if (investments.length === 0) {
+            calculator.style.display = 'none';
+            return;
         }
-    },
 
-    loadInvestmentPlansForModal() {
-        const select = document.getElementById('investment-plan');
-        if (!select || this.state.investmentPlans.length === 0) return;
+        let totalDailyInterest = 0;
+        let html = '<h4>Daily Interest Breakdown</h4>';
 
-        select.innerHTML = '<option value="">Choose a raw material</option>' +
-            this.state.investmentPlans.map(plan => `
-                <option value="${plan._id}">
-                    ${plan.name} - Min: ₦${(plan.min_amount || 0).toLocaleString()} | Daily: ${plan.daily_interest}%
-                </option>
-            `).join('');
+        investments.forEach(investment => {
+            const dailyInterest = (investment.amount * (investment.plan?.daily_interest || 0) / 100);
+            totalDailyInterest += dailyInterest;
+            
+            html += `
+                <div class="interest-item">
+                    <span>${investment.plan?.name || 'Plan'}:</span>
+                    <span>₦${dailyInterest.toLocaleString()}</span>
+                </div>
+            `;
+        });
+
+        html += `
+            <div class="interest-total">
+                <span><strong>Total Daily Interest:</strong></span>
+                <span><strong>₦${totalDailyInterest.toLocaleString()}</strong></span>
+            </div>
+            <div class="interest-note">
+                <small>Interest is calculated and added to your balance daily</small>
+            </div>
+        `;
+
+        breakdown.innerHTML = html;
+        calculator.style.display = 'block';
     },
 
     // ==================== TAB SWITCHING ====================
@@ -6286,327 +6472,6 @@ Please log into admin panel to review and approve this deposit.`;
         if (!isActive) {
             faqItem.classList.add('active');
         }
-    },
-
-    // ==================== ERROR HANDLING ====================
-    handleGlobalError(event) {
-        console.error('Global error:', event.error);
-        this.showToast('An unexpected error occurred', 'error');
-    },
-
-    handlePromiseRejection(event) {
-        console.error('Unhandled promise rejection:', event.reason);
-        this.showToast('An operation failed to complete', 'error');
-    },
-
-    // ==================== TWO-FACTOR AUTHENTICATION ====================
-    showTwoFactorPrompt() {
-        const modal = document.createElement('div');
-        modal.className = 'modal';
-        modal.id = 'two-factor-modal';
-        modal.innerHTML = `
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h2>Two-Factor Authentication</h2>
-                    <button class="close-modal" onclick="app.closeModal('two-factor-modal')">&times;</button>
-                </div>
-                <form id="two-factor-form">
-                    <div class="form-group">
-                        <label for="two-factor-code">Enter 6-digit code from your authenticator app</label>
-                        <input type="text" id="two-factor-code" class="form-control" 
-                               placeholder="000000" maxlength="6" pattern="[0-9]{6}" required>
-                    </div>
-                    <button type="submit" class="btn btn-primary" style="width: 100%;">
-                        Verify
-                    </button>
-                </form>
-            </div>
-        `;
-
-        document.body.appendChild(modal);
-        this.openModal('two-factor-modal');
-
-        document.getElementById('two-factor-form').addEventListener('submit', (e) => {
-            e.preventDefault();
-            this.verifyTwoFactorCode();
-        });
-    },
-
-    async verifyTwoFactorCode() {
-        const code = document.getElementById('two-factor-code').value;
-        
-        try {
-            const response = await this.apiRequest('/api/auth/verify-2fa', {
-                method: 'POST',
-                body: { code }
-            });
-
-            this.showToast('✅ Two-factor authentication successful!', 'success');
-            this.closeModal('two-factor-modal');
-            
-            setTimeout(() => {
-                if (this.state.isAdmin) {
-                    this.showPage('admin');
-                } else {
-                    this.showPage('dashboard');
-                }
-            }, 1000);
-        } catch (error) {
-            this.showToast('Invalid verification code', 'error');
-        }
-    },
-
-    // ==================== PASSWORD MANAGEMENT ====================
-    async handlePasswordReset(e) {
-        e.preventDefault();
-        
-        const email = document.getElementById('reset-email').value.trim();
-        
-        if (!email) {
-            this.showToast('Please enter your email address', 'error');
-            return;
-        }
-
-        try {
-            await this.apiRequest('/api/auth/forgot-password', {
-                method: 'POST',
-                body: { email: email }
-            });
-
-            this.showToast('✅ Password reset instructions sent to your email!', 'success');
-            this.closeModal('password-reset-modal');
-            document.getElementById('reset-email').value = '';
-        } catch (error) {
-            console.error('Password reset error:', error);
-        }
-    },
-
-    async handlePasswordChange(e) {
-        e.preventDefault();
-
-        const currentPassword = document.getElementById('current-password').value;
-        const newPassword = document.getElementById('new-password').value;
-        const confirmPassword = document.getElementById('confirm-new-password').value;
-
-        if (newPassword !== confirmPassword) {
-            this.showToast('New passwords do not match!', 'error');
-            return;
-        }
-
-        if (newPassword.length < 6) {
-            this.showToast('New password must be at least 6 characters', 'error');
-            return;
-        }
-
-        try {
-            await this.apiRequest('/api/auth/change-password', {
-                method: 'POST',
-                body: {
-                    current_password: currentPassword,
-                    new_password: newPassword
-                }
-            });
-
-            this.showToast('✅ Password changed successfully!', 'success');
-            e.target.reset();
-        } catch (error) {
-            console.error('Password change error:', error);
-            this.showToast('Error changing password', 'error');
-        }
-    },
-
-    // ==================== NOTIFICATION SYSTEM ====================
-    async loadNotifications() {
-        if (!this.state.currentUser) return;
-
-        try {
-            const response = await this.apiRequest('/api/notifications?limit=10');
-            const notifications = response.data?.notifications || [];
-            this.state.notifications = notifications;
-
-            const unreadCount = notifications.filter(n => !n.is_read).length;
-            const badge = document.getElementById('notification-badge');
-            if (badge) {
-                badge.textContent = unreadCount;
-                badge.style.display = unreadCount > 0 ? 'flex' : 'none';
-            }
-        } catch (error) {
-            console.error('Failed to load notifications:', error);
-        }
-    },
-
-    // ==================== DAILY INTEREST CALCULATION ====================
-    showDailyInterestCalculation(investments) {
-        const calculator = document.getElementById('daily-interest-calculator');
-        const breakdown = document.getElementById('interest-breakdown');
-        
-        if (!calculator || !breakdown) return;
-
-        if (investments.length === 0) {
-            calculator.style.display = 'none';
-            return;
-        }
-
-        let totalDailyInterest = 0;
-        let html = '<h4>Daily Interest Breakdown</h4>';
-
-        investments.forEach(investment => {
-            const dailyInterest = (investment.amount * (investment.plan?.daily_interest || 0) / 100);
-            totalDailyInterest += dailyInterest;
-            
-            html += `
-                <div class="interest-item">
-                    <span>${investment.plan?.name || 'Plan'}:</span>
-                    <span>₦${dailyInterest.toLocaleString()}</span>
-                </div>
-            `;
-        });
-
-        html += `
-            <div class="interest-total">
-                <span><strong>Total Daily Interest:</strong></span>
-                <span><strong>₦${totalDailyInterest.toLocaleString()}</strong></span>
-            </div>
-            <div class="interest-note">
-                <small>Interest is calculated and added to your balance daily</small>
-            </div>
-        `;
-
-        breakdown.innerHTML = html;
-        calculator.style.display = 'block';
-    },
-
-    // ==================== SETUP EVENT LISTENERS ====================
-    setupEventListeners() {
-        const themeToggle = document.getElementById('theme-toggle');
-        if (themeToggle) {
-            themeToggle.addEventListener('click', () => this.toggleTheme());
-        }
-
-        const hamburger = document.getElementById('hamburger');
-        if (hamburger) {
-            hamburger.addEventListener('click', () => this.openMobileMenu());
-        }
-
-        const closeMobileMenu = document.getElementById('close-mobile-menu');
-        if (closeMobileMenu) {
-            closeMobileMenu.addEventListener('click', () => this.closeMobileMenu());
-        }
-
-        const mobileMenuOverlay = document.getElementById('mobile-menu-overlay');
-        if (mobileMenuOverlay) {
-            mobileMenuOverlay.addEventListener('click', () => this.closeMobileMenu());
-        }
-
-        const backToTop = document.getElementById('back-to-top');
-        if (backToTop) {
-            backToTop.addEventListener('click', () => this.scrollToTop());
-        }
-
-        this.setupFormListeners();
-        this.initPasswordToggles();
-        this.initFileUploadPreviews();
-
-        window.addEventListener('scroll', () => this.handleScroll());
-
-        const withdrawAmount = document.getElementById('withdraw-amount');
-        if (withdrawAmount) {
-            withdrawAmount.addEventListener('input', () => this.updateWithdrawalFee());
-        }
-
-        const investAmount = document.getElementById('investment-amount');
-        const investPlan = document.getElementById('investment-plan');
-        if (investAmount && investPlan) {
-            investAmount.addEventListener('input', () => this.calculateInvestmentInterest());
-            investPlan.addEventListener('change', () => this.calculateInvestmentInterest());
-        }
-
-        window.addEventListener('hashchange', () => window.scrollTo(0, 0));
-
-        window.addEventListener('error', (e) => this.handleGlobalError(e));
-        window.addEventListener('unhandledrejection', (e) => this.handlePromiseRejection(e));
-    },
-
-    setupFormListeners() {
-        const forms = {
-            'registration-form': (e) => this.handleRegistration(e),
-            'login-form': (e) => this.handleLogin(e),
-            'invest-form': (e) => this.handleInvestment(e),
-            'deposit-form': (e) => this.handleDeposit(e),
-            'withdraw-form': (e) => this.handleWithdrawal(e),
-            'personal-form': (e) => this.handleProfileUpdate(e),
-            'bank-form': (e) => this.handleBankUpdate(e),
-            'kyc-form': (e) => this.handleKYCSubmission(e),
-            'support-form': (e) => this.handleSupportRequest(e),
-            'password-reset-form': (e) => this.handlePasswordReset(e),
-            'password-change-form': (e) => this.handlePasswordChange(e),
-            'preferences-form': (e) => this.handlePreferencesUpdate(e)
-        };
-
-        Object.entries(forms).forEach(([formId, handler]) => {
-            const form = document.getElementById(formId);
-            if (form) {
-                form.addEventListener('submit', handler);
-            }
-        });
-    },
-
-    testAPIConnection() {
-        try {
-            fetch(`${this.config.API_BASE_URL}/health`)
-                .then(response => {
-                    if (response.ok) {
-                        console.log('✅ API Connection: SUCCESS');
-                    } else {
-                        console.warn('⚠️ API Connection: WEAK');
-                    }
-                })
-                .catch(error => {
-                    console.error('❌ API Connection: FAILED');
-                    this.showToast('Backend connection issue. Some features may be limited.', 'warning');
-                });
-        } catch (error) {
-            console.error('API connection test error:', error);
-        }
-    },
-
-    initTheme() {
-        const savedTheme = localStorage.getItem('theme') || 'dark';
-        if (savedTheme === 'light') {
-            document.body.classList.add('light-mode');
-            const themeIcon = document.querySelector('#theme-toggle i');
-            if (themeIcon) {
-                themeIcon.classList.remove('fa-moon');
-                themeIcon.classList.add('fa-sun');
-            }
-        }
-    },
-
-    // ==================== NEW: OPEN INVESTMENT MODAL ====================
-    openInvestmentModal(planId) {
-        const plan = this.state.investmentPlans.find(p => p._id === planId);
-        if (!plan) return;
-
-        const modalId = 'invest-modal';
-        const modal = document.getElementById(modalId);
-        if (!modal) return;
-
-        // Set plan selection
-        const planSelect = document.getElementById('investment-plan');
-        if (planSelect) {
-            planSelect.value = planId;
-        }
-
-        // Set minimum amount
-        const amountInput = document.getElementById('investment-amount');
-        if (amountInput) {
-            amountInput.min = plan.min_amount;
-            amountInput.placeholder = `Minimum: ₦${plan.min_amount.toLocaleString()}`;
-        }
-
-        // Open modal
-        this.openModal(modalId);
-        this.calculateInvestmentInterest();
     }
 };
 
